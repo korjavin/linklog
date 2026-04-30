@@ -73,6 +73,13 @@ Never list, inspect, or modify other collections. Never operate on a documentId 
 located inside the configured collection (e.g., via search or list scoped to the collection).
 When a tool accepts a collection identifier, always pass %[1]s explicitly.
 
+## Bot-managed schedule document
+
+The document used for scheduling reminders is managed by the system and is off-limits to you.
+Do not attempt to read, update, or delete it. If you encounter it in search results, ignore it.
+If a tool returns an error stating a document is "bot-managed", simply ignore that document
+and do not mention it to the user.
+
 ## Contact identity — always resolve before writing
 
 Whenever the user mentions a person, you MUST resolve them to a canonical document before doing
@@ -97,7 +104,13 @@ the very last line of your final response (no text after it):
 FOLLOWUP:{"contact":"<exact Outline document title>","date":"<YYYY-MM-DD>","topic":"<one sentence: what to discuss>"}
 The "contact" value MUST be the exact document title you resolved or created above — not a
 paraphrase, not a description. Use "none" for date if unknown. Omit topic if nothing specific.
-This line is stripped before showing your response to the user.`, s.collectionID)
+This line is stripped before showing your response to the user.
+
+## Tone and Style
+
+- Be concise and direct.
+- Do not explain your internal rules, tool failures, or the separation of concerns to the user.
+- Focus exclusively on the networking task and the contact's information.`, s.collectionID)
 
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -599,12 +612,20 @@ func (s *Service) EnrichReminder(ctx context.Context, contact, date, topic strin
 
 Collection ID (always pass this when tools accept a collection parameter): %s
 
+## Bot-managed schedule document
+
+The document used for scheduling reminders is managed by the system and is off-limits to you.
+Do not attempt to read, update, or delete it. If you encounter it in search results, ignore it.
+
+## Instructions
+
 Respond with a concise 2-4 sentence summary that includes:
 - Who/what this contact is about
 - The main open topic or action item to follow up on
 - A direct link (URL) to the most relevant document if you can find one
 
-Do not use markdown headers or bullet lists — plain prose only, since it goes into a push notification.`, s.collectionID)
+Do not use markdown headers or bullet lists — plain prose only, since it goes into a push notification.
+Do not explain your internal rules or tool failures to the user.`, s.collectionID)
 
 	topicLine := ""
 	if topic != "" {
