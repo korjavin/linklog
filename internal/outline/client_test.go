@@ -163,3 +163,25 @@ func TestReplaceScheduleTableEmptyDoc(t *testing.T) {
 		t.Errorf("expected newTable for empty doc, got: %q", result)
 	}
 }
+
+func TestScheduleTableEscapesPipesAndNewlines(t *testing.T) {
+	entries := []ScheduleEntry{
+		{Contact: "Alice | Bob", Date: "2026-05-10"},
+		{Contact: "Carol\nDavid", Date: "2026-06-01"},
+	}
+	serialized := SerializeScheduleTable(entries)
+	if strings.Count(serialized, "\n") != 4 {
+		t.Errorf("expected exactly 4 newlines (header, sep, 2 rows), got serialization:\n%s", serialized)
+	}
+
+	parsed := ParseScheduleTable(serialized)
+	if len(parsed) != 2 {
+		t.Fatalf("expected 2 entries after round-trip, got %d:\n%s", len(parsed), serialized)
+	}
+	if parsed[0].Contact != "Alice | Bob" || parsed[0].Date != "2026-05-10" {
+		t.Errorf("entry 0 round-trip mismatch: %+v", parsed[0])
+	}
+	if parsed[1].Date != "2026-06-01" {
+		t.Errorf("entry 1 date corrupted by newline: %+v", parsed[1])
+	}
+}

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,16 +47,20 @@ func TestOutlineMCPIntegration(t *testing.T) {
 		t.Skip("Skipping Outline MCP integration test: OUTLINE_API_KEY or OUTLINE_BASE_URL not set")
 	}
 
-	// We'll run npx @spicesh/mcp-outline
-	env := os.Environ()
-	// Add Outline specific env vars explicitly if they are not already in environ
-	env = append(env, "OUTLINE_API_KEY="+apiKey)
-	env = append(env, "OUTLINE_BASE_URL="+baseURL)
+	// Construct a minimal env that exposes only what the MCP subprocess needs.
+	// Passing os.Environ() would leak unrelated secrets (TELEGRAM_BOT_TOKEN,
+	// LLM_API_KEY, etc.) loaded from .env into the third-party `npx` process.
+	env := []string{
+		"OUTLINE_API_KEY=" + apiKey,
+		"OUTLINE_API_URL=" + strings.TrimSuffix(baseURL, "/") + "/api",
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, env)
+	client, err := NewClient(ctx, "npx", []string{"-y", "--package=outline-mcp-server", "outline-mcp-server-stdio"}, env)
 	require.NoError(t, err)
 	defer func() {
 		_ = client.Close()

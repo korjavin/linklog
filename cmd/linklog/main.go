@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/korjavin/linklog/internal/bot"
@@ -29,11 +30,13 @@ func main() {
 	outClient := outline.NewClient(cfg.OutlineAPIKey, cfg.OutlineBaseURL)
 	mcpEnv := []string{
 		"OUTLINE_API_KEY=" + cfg.OutlineAPIKey,
-		"OUTLINE_BASE_URL=" + cfg.OutlineBaseURL,
+		// outline-mcp-server reads OUTLINE_API_URL (not OUTLINE_BASE_URL) and
+		// expects it to include the /api suffix.
+		"OUTLINE_API_URL=" + strings.TrimSuffix(cfg.OutlineBaseURL, "/") + "/api",
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + os.Getenv("HOME"),
 	}
-	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, mcpEnv)
+	mcpClient, err := mcp.NewClient(ctx, "outline-mcp-server-stdio", nil, mcpEnv)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP client: %v", err)
 	}
@@ -43,7 +46,7 @@ func main() {
 	openaiConfig.BaseURL = cfg.LLMBaseURL
 	openaiClient := openai.NewClientWithConfig(openaiConfig)
 
-	llmService := llm.NewService(openaiClient, mcpClient, cfg.OutlineCollectionID, cfg.LLMModel)
+	llmService := llm.NewService(openaiClient, mcpClient, outClient, cfg.OutlineCollectionID, cfg.LLMModel)
 
 	tgBot, err := bot.NewBot(cfg.TelegramBotToken, cfg.TelegramAdminChatID, llmService, outClient, cfg.ScheduleDocID)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/korjavin/linklog/internal/llm"
@@ -18,11 +19,17 @@ const (
 )
 
 type Bot struct {
-	tb           *telebot.Bot
-	llmService   *llm.Service
-	outClient    *outline.Client
-	scheduleDoc  string
-	adminChatID  int64
+	tb          *telebot.Bot
+	llmService  *llm.Service
+	outClient   *outline.Client
+	scheduleDoc string
+	adminChatID int64
+	// scheduleMu serializes read-modify-write cycles on the schedule document.
+	// Telebot dispatches handlers in their own goroutines by default, so two
+	// nearly-simultaneous messages could otherwise both fetch the doc, each
+	// apply only their own change, and race on the final UpdateDocument call —
+	// dropping one of the reminders.
+	scheduleMu sync.Mutex
 }
 
 func NewBot(token string, adminChatID int64, llmService *llm.Service, outClient *outline.Client, scheduleDoc string) (*Bot, error) {
@@ -104,6 +111,9 @@ func truncateForTelegram(s string) string {
 }
 
 func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
+	b.scheduleMu.Lock()
+	defer b.scheduleMu.Unlock()
+
 	doc, err := b.outClient.GetDocument(ctx, b.scheduleDoc)
 	if err != nil {
 		return fmt.Errorf("failed to get schedule doc: %w", err)

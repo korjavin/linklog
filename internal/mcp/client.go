@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os/exec"
 
 	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sashabaranov/go-openai"
 )
@@ -18,7 +20,17 @@ type Client struct {
 func NewClient(ctx context.Context, command string, args []string, env []string) (*Client, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	mcpClient, err := client.NewStdioMCPClient(command, env, args...)
+	// Use a custom command factory to avoid mcp-go's default behavior of
+	// appending os.Environ() to the env passed in. The parent process holds
+	// secrets (Telegram bot token, LLM API key, etc.) that have no business
+	// reaching the third-party MCP subprocess.
+	cmdFunc := func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
+		cmd := exec.CommandContext(ctx, command, args...)
+		cmd.Env = env
+		return cmd, nil
+	}
+
+	mcpClient, err := client.NewStdioMCPClientWithOptions(command, env, args, transport.WithCommandFunc(cmdFunc))
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create MCP client: %w", err)

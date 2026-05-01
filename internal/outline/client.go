@@ -32,9 +32,10 @@ type DocumentResponse struct {
 }
 
 type Document struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Text  string `json:"text"`
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Text         string `json:"text"`
+	CollectionID string `json:"collectionId"`
 }
 
 func (c *Client) GetDocument(ctx context.Context, id string) (*Document, error) {
@@ -43,6 +44,18 @@ func (c *Client) GetDocument(ctx context.Context, id string) (*Document, error) 
 		return nil, err
 	}
 	return &res.Data, nil
+}
+
+// DocumentCollectionID returns the collectionId of the given document, or an
+// empty string if the document or collection cannot be determined. It is used
+// by the LLM service to validate that document-targeted tool calls stay within
+// the configured collection scope.
+func (c *Client) DocumentCollectionID(ctx context.Context, documentID string) (string, error) {
+	doc, err := c.GetDocument(ctx, documentID)
+	if err != nil {
+		return "", err
+	}
+	return doc.CollectionID, nil
 }
 
 func (c *Client) UpdateDocument(ctx context.Context, id, text string) error {
@@ -135,10 +148,10 @@ func ParseScheduleTable(text string) []ScheduleEntry {
 		if sepIdx > 0 && i == sepIdx-1 {
 			continue
 		}
-		parts := strings.Split(line, "|")
-		if len(parts) >= 3 {
-			contact := strings.TrimSpace(parts[1])
-			date := strings.TrimSpace(parts[2])
+		parts := splitTableRow(line)
+		if len(parts) >= 2 {
+			contact := strings.TrimSpace(parts[0])
+			date := strings.TrimSpace(parts[1])
 			if contact != "" && date != "" {
 				entries = append(entries, ScheduleEntry{Contact: contact, Date: date})
 			}
@@ -147,12 +160,59 @@ func ParseScheduleTable(text string) []ScheduleEntry {
 	return entries
 }
 
+// splitTableRow splits a GFM table row on unescaped pipes, dropping the empty
+// leading/trailing cells produced by the row's outer pipes. A backslash before
+// a pipe is treated as an escape and the pipe is kept inside the cell.
+func splitTableRow(line string) []string {
+	var cells []string
+	var cur strings.Builder
+	escaped := false
+	for _, r := range line {
+		if escaped {
+			cur.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '|' {
+			cells = append(cells, cur.String())
+			cur.Reset()
+			continue
+		}
+		cur.WriteRune(r)
+	}
+	cells = append(cells, cur.String())
+	if len(cells) > 0 && strings.TrimSpace(cells[0]) == "" {
+		cells = cells[1:]
+	}
+	if len(cells) > 0 && strings.TrimSpace(cells[len(cells)-1]) == "" {
+		cells = cells[:len(cells)-1]
+	}
+	return cells
+}
+
+// escapeCell makes a value safe for a single GFM table cell: escapes pipes
+// (which would split a cell) and replaces newlines (which would terminate the
+// row) with spaces. Without this, an LLM-supplied contact like "Alice | Bob"
+// would shift columns and parsing would later read the wrong contact/date.
+func escapeCell(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "|", "\\|")
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
+}
+
 func SerializeScheduleTable(entries []ScheduleEntry) string {
 	var sb strings.Builder
 	sb.WriteString("| Contact | Next Contact Date |\n")
 	sb.WriteString("| --- | --- |\n")
 	for _, entry := range entries {
-		fmt.Fprintf(&sb, "| %s | %s |\n", entry.Contact, entry.Date)
+		fmt.Fprintf(&sb, "| %s | %s |\n", escapeCell(entry.Contact), escapeCell(entry.Date))
 	}
 	return sb.String()
 }
