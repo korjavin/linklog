@@ -101,11 +101,14 @@ type ScheduleEntry struct {
 }
 
 // isSeparatorRow reports whether the row is a GFM table separator (cells of dashes/colons).
+// Requires at least one non-empty dash/colon cell — a blank pipe row like "|" or "| |"
+// is not a separator (treating it as one would skip the preceding row as a "header").
 func isSeparatorRow(line string) bool {
 	parts := strings.Split(strings.Trim(line, "|"), "|")
 	if len(parts) == 0 {
 		return false
 	}
+	sawDashOrColon := false
 	for _, p := range parts {
 		t := strings.TrimSpace(p)
 		if t == "" {
@@ -116,8 +119,9 @@ func isSeparatorRow(line string) bool {
 				return false
 			}
 		}
+		sawDashOrColon = true
 	}
-	return true
+	return sawDashOrColon
 }
 
 func ParseScheduleTable(text string) []ScheduleEntry {

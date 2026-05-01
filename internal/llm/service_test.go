@@ -357,6 +357,20 @@ func TestEnforceCollectionScopeNormalizesNilArgs(t *testing.T) {
 	assert.Equal(t, "scoped-collection", args["collectionId"])
 }
 
+func TestIsProtectedDocIDBlocksScheduleDoc(t *testing.T) {
+	// The schedule doc is bot-managed state. Even when it lives inside the
+	// configured collection (which would otherwise pass the membership check),
+	// the LLM agent must not be able to read or modify it via MCP tools.
+	s := &Service{collectionID: "scoped-collection", protectedDocID: "schedule-doc-id"}
+	assert.True(t, s.isProtectedDocID("schedule-doc-id"))
+	assert.False(t, s.isProtectedDocID("other-doc-id"))
+	assert.False(t, s.isProtectedDocID(""))
+
+	// When no protected doc is configured, no document is protected.
+	unprotected := &Service{collectionID: "scoped-collection"}
+	assert.False(t, unprotected.isProtectedDocID("schedule-doc-id"))
+}
+
 func TestExecuteToolCallNormalizesNullArgs(t *testing.T) {
 	// A model that emits the literal `null` for arguments must not bypass
 	// scope enforcement. executeToolCall should normalize nil to an empty map
@@ -464,7 +478,7 @@ func TestLLMServiceIntegration(t *testing.T) {
 	collectionID := os.Getenv("OUTLINE_COLLECTION_ID")
 	outClient := outline.NewClient(outlineKey, outlineURL)
 
-	svc := NewService(openaiClient, mcpClient, outClient, collectionID, model)
+	svc := NewService(openaiClient, mcpClient, outClient, collectionID, model, os.Getenv("SCHEDULE_DOC_ID"))
 
 	reply, followUp, err := svc.ProcessInteraction(ctx, "Hello! Please list the collections in Outline. Do not create anything.")
 	require.NoError(t, err)

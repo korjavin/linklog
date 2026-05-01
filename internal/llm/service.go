@@ -22,6 +22,11 @@ type Service struct {
 	outClient    *outline.Client
 	collectionID string
 	model        string
+	// protectedDocID is the bot-managed schedule document. The bot owns its
+	// content via the Outline REST API; the LLM agent must never touch it,
+	// even when it happens to live inside the configured collection (in which
+	// case the collection-membership check would otherwise let it through).
+	protectedDocID string
 }
 
 type FollowUp struct {
@@ -29,13 +34,14 @@ type FollowUp struct {
 	Date    string
 }
 
-func NewService(client *openai.Client, mcpClient *mcp.Client, outClient *outline.Client, collectionID, model string) *Service {
+func NewService(client *openai.Client, mcpClient *mcp.Client, outClient *outline.Client, collectionID, model, protectedDocID string) *Service {
 	return &Service{
-		client:       client,
-		mcpClient:    mcpClient,
-		outClient:    outClient,
-		collectionID: collectionID,
-		model:        model,
+		client:         client,
+		mcpClient:      mcpClient,
+		outClient:      outClient,
+		collectionID:   collectionID,
+		model:          model,
+		protectedDocID: protectedDocID,
 	}
 }
 
@@ -436,6 +442,12 @@ func (s *Service) validateDocumentScope(ctx context.Context, toolName string, ar
 	return s.walkArgsForDocumentIDs(ctx, args)
 }
 
+// isProtectedDocID reports whether the given document ID refers to a
+// bot-managed document the LLM must not touch (currently the schedule doc).
+func (s *Service) isProtectedDocID(docID string) bool {
+	return s.protectedDocID != "" && docID == s.protectedDocID
+}
+
 func (s *Service) walkArgsForDocumentIDs(ctx context.Context, v interface{}) (string, bool) {
 	switch t := v.(type) {
 	case map[string]interface{}:
@@ -485,6 +497,9 @@ func (s *Service) checkDocumentValue(ctx context.Context, v interface{}) (string
 }
 
 func (s *Service) checkDocumentInScope(ctx context.Context, docID string) (string, bool) {
+	if s.isProtectedDocID(docID) {
+		return fmt.Sprintf("document %q is bot-managed schedule state and is off-limits to the agent", docID), false
+	}
 	actual, err := s.outClient.DocumentCollectionID(ctx, docID)
 	if err != nil {
 		// Fail closed: if we cannot prove the document is in scope, refuse.

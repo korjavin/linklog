@@ -46,7 +46,7 @@ func main() {
 	openaiConfig.BaseURL = cfg.LLMBaseURL
 	openaiClient := openai.NewClientWithConfig(openaiConfig)
 
-	llmService := llm.NewService(openaiClient, mcpClient, outClient, cfg.OutlineCollectionID, cfg.LLMModel)
+	llmService := llm.NewService(openaiClient, mcpClient, outClient, cfg.OutlineCollectionID, cfg.LLMModel, cfg.ScheduleDocID)
 
 	tgBot, err := bot.NewBot(cfg.TelegramBotToken, cfg.TelegramAdminChatID, llmService, outClient, cfg.ScheduleDocID)
 	if err != nil {

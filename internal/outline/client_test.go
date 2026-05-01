@@ -164,6 +164,45 @@ func TestReplaceScheduleTableEmptyDoc(t *testing.T) {
 	}
 }
 
+func TestIsSeparatorRowRejectsBlankPipeRows(t *testing.T) {
+	// Without the dash/colon requirement, blank pipe rows like "|" or "| |"
+	// would be misclassified as separators, causing ParseScheduleTable to skip
+	// the preceding data row as a "header" and silently drop it.
+	cases := []struct {
+		line string
+		want bool
+	}{
+		{"| --- | --- |", true},
+		{"|---|---|", true},
+		{"| :--- | ---: |", true},
+		{"|", false},
+		{"||", false},
+		{"|   |   |", false},
+		{"| Alice | 2026-05-10 |", false},
+	}
+	for _, tc := range cases {
+		if got := isSeparatorRow(tc.line); got != tc.want {
+			t.Errorf("isSeparatorRow(%q) = %v, want %v", tc.line, got, tc.want)
+		}
+	}
+}
+
+func TestParseScheduleTableSurvivesBlankPipeRow(t *testing.T) {
+	// A stray blank pipe row in the middle of the data must not be treated as a
+	// separator: doing so would skip the row above it as a "header".
+	text := `| Alice | 2026-05-10 |
+|
+| Bob | 2026-06-01 |
+`
+	entries := ParseScheduleTable(text)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries despite blank pipe row, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].Contact != "Alice" || entries[1].Contact != "Bob" {
+		t.Errorf("unexpected entries: %+v", entries)
+	}
+}
+
 func TestScheduleTableEscapesPipesAndNewlines(t *testing.T) {
 	entries := []ScheduleEntry{
 		{Contact: "Alice | Bob", Date: "2026-05-10"},
