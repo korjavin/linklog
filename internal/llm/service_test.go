@@ -72,11 +72,12 @@ func TestParseFollowUpIgnoresPastDateInJSON(t *testing.T) {
 }
 
 func TestExtractFollowUpStripsLineAndParses(t *testing.T) {
-	text := "I've updated the Alex document.\nFOLLOWUP:{\"contact\":\"Alex\",\"date\":\"2026-08-01\"}"
+	text := "I've updated the Alex document.\nFOLLOWUP:{\"contact\":\"Alex\",\"date\":\"2026-08-01\",\"topic\":\"Ask about kite-surfing\"}"
 	cleaned, fu := extractFollowUp(text, "2026-12-31")
 	assert.Equal(t, "I've updated the Alex document.", cleaned)
 	assert.Equal(t, "Alex", fu.Contact)
 	assert.Equal(t, "2026-08-01", fu.Date)
+	assert.Equal(t, "Ask about kite-surfing", fu.Topic)
 }
 
 func TestExtractFollowUpNoLineReturnsEmpty(t *testing.T) {

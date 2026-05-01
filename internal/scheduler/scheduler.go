@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,12 +19,10 @@ type Scheduler struct {
 	tgBot       *bot.Bot
 	llmService  *llm.Service
 	scheduleDoc string
-
+	// mu serializes checkSchedule runs so two concurrent invocations (startup
+	// goroutine + first cron tick) cannot both read an un-notified entry, both
+	// send a notification, and both write back NotifiedAt.
 	mu sync.Mutex
-	// notifiedOn tracks "contact|date" pairs we already notified for. Keyed on the entry's
-	// scheduled date (not today), so updating the date in the doc re-arms the reminder while
-	// stale overdue entries don't spam every tick.
-	notifiedOn map[string]bool
 }
 
 func NewScheduler(outClient *outline.Client, tgBot *bot.Bot, llmService *llm.Service, scheduleDoc string) *Scheduler {
@@ -35,7 +32,6 @@ func NewScheduler(outClient *outline.Client, tgBot *bot.Bot, llmService *llm.Ser
 		tgBot:       tgBot,
 		llmService:  llmService,
 		scheduleDoc: scheduleDoc,
-		notifiedOn:  make(map[string]bool),
 	}
 }
 
@@ -52,19 +48,7 @@ func (s *Scheduler) Stop() {
 	s.cron.Stop()
 }
 
-// notifiedRetention bounds how far back we keep entries in notifiedOn. Once a
-// scheduled date is older than this, the user has either acted on it (updating
-// the date in the doc, which produces a new key) or it has gone stale — either
-// way, the old notification record is no longer load-bearing and would only
-// grow the map without bound.
-const notifiedRetention = 90 * 24 * time.Hour
-
 func (s *Scheduler) checkSchedule() {
-	// Hold the lock for the entire run. The function is invoked at most every
-	// 2h by cron plus once at startup; serializing the body removes the
-	// read-then-write race on notifiedOn (where two concurrent runs could each
-	// observe `already == false` and double-notify) and lets us prune the map
-	// safely in the same critical section.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -77,76 +61,60 @@ func (s *Scheduler) checkSchedule() {
 		return
 	}
 
-	now := time.Now()
-	today := now.Format("2006-01-02")
-	s.pruneNotifiedLocked(now)
+	today := time.Now().Format("2006-01-02")
 
 	for _, entry := range outline.ParseScheduleTable(doc.Text) {
 		if _, err := time.Parse("2006-01-02", entry.Date); err != nil {
 			log.Printf("Scheduler: skipping %q with unparseable date %q", entry.Contact, entry.Date)
 			continue
 		}
-		// ISO-8601 dates sort lexically, so a string compare is equivalent to a
-		// time compare here and avoids a redundant Format round-trip.
 		if entry.Date > today {
 			continue
 		}
-		key := entry.Contact + "|" + entry.Date
-		if s.notifiedOn[key] {
+		// NotifiedAt >= Date means we already sent a notification for this
+		// schedule date. The field is reset implicitly when the user or bot
+		// sets a new future Date (making NotifiedAt < Date again).
+		if entry.NotifiedAt >= entry.Date {
 			continue
 		}
 
-		msg := s.buildReminderMessage(entry.Contact, entry.Date)
+		msg := s.buildReminderMessage(entry)
 		if err := s.tgBot.NotifyWithButtons(entry.Contact, msg); err != nil {
-			// Don't mark as notified — let the next tick retry.
+			// Don't record notifiedAt — let the next tick retry.
 			continue
 		}
-		s.notifiedOn[key] = true
+
+		writeCtx, writeCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := s.tgBot.SetNotifiedAt(writeCtx, entry.Contact, today); err != nil {
+			log.Printf("Scheduler: failed to persist notifiedAt for %q: %v", entry.Contact, err)
+		}
+		writeCancel()
 	}
 }
 
 const enrichTimeout = 90 * time.Second
 
-// buildReminderMessage composes the full notification text. It calls the LLM
-// to search Outline for context about the contact; on failure it falls back to
-// a plain reminder so the notification is never silently dropped.
-func (s *Scheduler) buildReminderMessage(contact, date string) string {
-	header := fmt.Sprintf("Reminder: follow up with %s (scheduled %s)", contact, date)
+// buildReminderMessage composes the notification text. If the entry has a
+// stored topic it is included in the header for a fast preview even before the
+// LLM enrichment runs. Falls back to a plain header on LLM errors.
+func (s *Scheduler) buildReminderMessage(entry outline.ScheduleEntry) string {
+	header := fmt.Sprintf("Reminder: follow up with %s (scheduled %s)", entry.Contact, entry.Date)
+	if entry.Topic != "" {
+		header += "\nTopic: " + entry.Topic
+	}
 	if s.llmService == nil {
 		return header
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), enrichTimeout)
 	defer cancel()
 
-	summary, err := s.llmService.EnrichReminder(ctx, contact, date)
+	summary, err := s.llmService.EnrichReminder(ctx, entry.Contact, entry.Date, entry.Topic)
 	if err != nil {
-		log.Printf("Scheduler: failed to enrich reminder for %q: %v", contact, err)
+		log.Printf("Scheduler: failed to enrich reminder for %q: %v", entry.Contact, err)
 		return header
 	}
 	if summary == "" {
 		return header
 	}
 	return header + "\n\n" + summary
-}
-
-// pruneNotifiedLocked drops notification records whose date is older than
-// notifiedRetention. Caller must hold s.mu.
-func (s *Scheduler) pruneNotifiedLocked(now time.Time) {
-	cutoff := now.Add(-notifiedRetention)
-	for key := range s.notifiedOn {
-		// key format: "contact|YYYY-MM-DD"
-		idx := strings.LastIndex(key, "|")
-		if idx < 0 {
-			continue
-		}
-		dateStr := key[idx+1:]
-		parsed, err := time.Parse("2006-01-02", dateStr)
-		if err != nil {
-			delete(s.notifiedOn, key)
-			continue
-		}
-		if parsed.Before(cutoff) {
-			delete(s.notifiedOn, key)
-		}
-	}
 }

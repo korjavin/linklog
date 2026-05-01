@@ -101,7 +101,7 @@ func (b *Bot) handleText(c telebot.Context) error {
 	}
 
 	if followUp.Date != "" && followUp.Contact != "" {
-		if err := b.upsertSchedule(ctx, followUp.Contact, followUp.Date); err != nil {
+		if err := b.upsertSchedule(ctx, followUp.Contact, followUp.Date, followUp.Topic); err != nil {
 			log.Printf("Error updating schedule: %v", err)
 			finalReply += "\n\n(note: failed to record the follow-up reminder)"
 		}
@@ -139,7 +139,7 @@ func (b *Bot) handleSnooze(c telebot.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := b.upsertSchedule(ctx, contact, newDate); err != nil {
+	if err := b.upsertSchedule(ctx, contact, newDate, ""); err != nil {
 		log.Printf("Snooze: failed to update schedule for %q: %v", contact, err)
 		_ = c.Respond(&telebot.CallbackResponse{Text: "Failed to snooze, check logs."})
 		return err
@@ -151,7 +151,7 @@ func (b *Bot) handleSnooze(c telebot.Context) error {
 	return err
 }
 
-func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
+func (b *Bot) upsertSchedule(ctx context.Context, contact, date, topic string) error {
 	b.scheduleMu.Lock()
 	defer b.scheduleMu.Unlock()
 
@@ -166,12 +166,39 @@ func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
 	for i, entry := range entries {
 		if strings.EqualFold(entry.Contact, contact) {
 			entries[i].Date = date
+			if topic != "" {
+				entries[i].Topic = topic
+			}
 			found = true
 			break
 		}
 	}
 	if !found {
-		entries = append(entries, outline.ScheduleEntry{Contact: contact, Date: date})
+		entries = append(entries, outline.ScheduleEntry{Contact: contact, Date: date, Topic: topic})
+	}
+
+	newTable := outline.SerializeScheduleTable(entries)
+	return b.outClient.UpdateDocument(ctx, b.scheduleDoc, outline.ReplaceScheduleTable(doc.Text, newTable))
+}
+
+// SetNotifiedAt updates the NotifiedAt field for the given contact in the
+// schedule doc. Called by the scheduler after a notification is sent so the
+// state survives bot restarts.
+func (b *Bot) SetNotifiedAt(ctx context.Context, contact, notifiedAt string) error {
+	b.scheduleMu.Lock()
+	defer b.scheduleMu.Unlock()
+
+	doc, err := b.outClient.GetDocument(ctx, b.scheduleDoc)
+	if err != nil {
+		return fmt.Errorf("failed to get schedule doc: %w", err)
+	}
+
+	entries := outline.ParseScheduleTable(doc.Text)
+	for i, entry := range entries {
+		if strings.EqualFold(entry.Contact, contact) {
+			entries[i].NotifiedAt = notifiedAt
+			break
+		}
 	}
 
 	newTable := outline.SerializeScheduleTable(entries)

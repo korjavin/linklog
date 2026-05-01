@@ -96,8 +96,10 @@ func (c *Client) post(ctx context.Context, path string, body, out interface{}) e
 }
 
 type ScheduleEntry struct {
-	Contact string
-	Date    string
+	Contact    string
+	Date       string
+	Topic      string // brief context for the next interaction
+	NotifiedAt string // YYYY-MM-DD of the last notification sent for this entry
 }
 
 // isSeparatorRow reports whether the row is a GFM table separator (cells of dashes/colons).
@@ -157,7 +159,14 @@ func ParseScheduleTable(text string) []ScheduleEntry {
 			contact := strings.TrimSpace(parts[0])
 			date := strings.TrimSpace(parts[1])
 			if contact != "" && date != "" {
-				entries = append(entries, ScheduleEntry{Contact: contact, Date: date})
+				entry := ScheduleEntry{Contact: contact, Date: date}
+				if len(parts) >= 3 {
+					entry.Topic = strings.TrimSpace(parts[2])
+				}
+				if len(parts) >= 4 {
+					entry.NotifiedAt = strings.TrimSpace(parts[3])
+				}
+				entries = append(entries, entry)
 			}
 		}
 	}
@@ -213,10 +222,15 @@ func escapeCell(s string) string {
 
 func SerializeScheduleTable(entries []ScheduleEntry) string {
 	var sb strings.Builder
-	sb.WriteString("| Contact | Next Contact Date |\n")
-	sb.WriteString("| --- | --- |\n")
+	sb.WriteString("| Contact | Next Contact Date | Follow-up Topic | Last Notified |\n")
+	sb.WriteString("| --- | --- | --- | --- |\n")
 	for _, entry := range entries {
-		fmt.Fprintf(&sb, "| %s | %s |\n", escapeCell(entry.Contact), escapeCell(entry.Date))
+		fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n",
+			escapeCell(entry.Contact),
+			escapeCell(entry.Date),
+			escapeCell(entry.Topic),
+			escapeCell(entry.NotifiedAt),
+		)
 	}
 	return sb.String()
 }

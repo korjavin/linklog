@@ -57,6 +57,7 @@ func TestUpdateDocument(t *testing.T) {
 }
 
 func TestScheduleTable(t *testing.T) {
+	// Old 2-column format — must still parse correctly (backward compatibility).
 	text := `| Contact | Next Contact Date |
 | --- | --- |
 | John Doe | 2026-05-10 |
@@ -74,11 +75,36 @@ func TestScheduleTable(t *testing.T) {
 	if !testing.Short() {
 		t.Logf("Serialized table:\n%s", serialized)
 	}
+	// New format has 4 columns.
+	if !strings.Contains(serialized, "Follow-up Topic") {
+		t.Errorf("serialized table missing Follow-up Topic header: %s", serialized)
+	}
 
 	// Re-parse and verify
 	reParsed := ParseScheduleTable(serialized)
 	if len(reParsed) != 2 {
 		t.Fatalf("Expected 2 entries after re-parse, got %d", len(reParsed))
+	}
+}
+
+func TestScheduleTableFourColumnRoundTrip(t *testing.T) {
+	entries := []ScheduleEntry{
+		{Contact: "Alice", Date: "2026-06-01", Topic: "Discuss project X", NotifiedAt: "2026-05-01"},
+		{Contact: "Bob", Date: "2026-07-01", Topic: "", NotifiedAt: ""},
+	}
+	serialized := SerializeScheduleTable(entries)
+	parsed := ParseScheduleTable(serialized)
+	if len(parsed) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(parsed))
+	}
+	if parsed[0].Topic != "Discuss project X" {
+		t.Errorf("topic mismatch: %q", parsed[0].Topic)
+	}
+	if parsed[0].NotifiedAt != "2026-05-01" {
+		t.Errorf("notifiedAt mismatch: %q", parsed[0].NotifiedAt)
+	}
+	if parsed[1].Topic != "" || parsed[1].NotifiedAt != "" {
+		t.Errorf("expected empty topic/notifiedAt for Bob: %+v", parsed[1])
 	}
 }
 

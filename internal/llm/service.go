@@ -32,6 +32,7 @@ type Service struct {
 type FollowUp struct {
 	Contact string
 	Date    string
+	Topic   string // brief summary of what to discuss at the next interaction
 }
 
 func NewService(client *openai.Client, mcpClient *mcp.Client, outClient *outline.Client, collectionID, model, protectedDocID string) *Service {
@@ -74,8 +75,9 @@ When a tool accepts a collection identifier, always pass %[1]s explicitly.
 
 If the conversation involves scheduling a follow-up with a specific person, append exactly this as
 the very last line of your final response (no text after it):
-FOLLOWUP:{"contact":"<short name>","date":"<YYYY-MM-DD>"}
-Use "none" for date if no specific date is known. This line is stripped before showing your response.`, s.collectionID)
+FOLLOWUP:{"contact":"<short name>","date":"<YYYY-MM-DD>","topic":"<one sentence: what to discuss>"}
+Use "none" for date if no specific date is known. Omit topic if nothing specific to note.
+This line is stripped before showing your response to the user.`, s.collectionID)
 
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -551,8 +553,9 @@ func looksLikeDocumentIDKey(propName, toolName string) bool {
 
 // EnrichReminder searches the Outline knowledge base for context about the
 // given contact and returns a concise summary suitable for a Telegram reminder.
-// Falls back to an empty string on error so callers can degrade gracefully.
-func (s *Service) EnrichReminder(ctx context.Context, contact, date string) (string, error) {
+// topic is the stored follow-up topic hint (may be empty). Falls back to an
+// empty string on error so callers can degrade gracefully.
+func (s *Service) EnrichReminder(ctx context.Context, contact, date, topic string) (string, error) {
 	tools, err := s.mcpClient.ListTools(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list tools: %w", err)
@@ -583,7 +586,11 @@ Respond with a concise 2-4 sentence summary that includes:
 
 Do not use markdown headers or bullet lists — plain prose only, since it goes into a push notification.`, s.collectionID)
 
-	userPrompt := fmt.Sprintf("Contact: %s\nFollow-up scheduled: %s\n\nSearch for relevant documents and summarize what to discuss.", contact, date)
+	topicLine := ""
+	if topic != "" {
+		topicLine = "\nStored topic: " + topic
+	}
+	userPrompt := fmt.Sprintf("Contact: %s\nFollow-up scheduled: %s%s\n\nSearch for relevant documents and summarize what to discuss.", contact, date, topicLine)
 
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -666,6 +673,7 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 	var parsed struct {
 		Contact string `json:"contact"`
 		Date    string `json:"date"`
+		Topic   string `json:"topic"`
 	}
 	fu := FollowUp{}
 	candidate := raw
@@ -679,6 +687,7 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 		jsonOK = true
 		fu.Contact = strings.TrimSpace(parsed.Contact)
 		fu.Date = strings.TrimSpace(parsed.Date)
+		fu.Topic = strings.TrimSpace(parsed.Topic)
 	}
 
 	if strings.EqualFold(fu.Date, "none") {
