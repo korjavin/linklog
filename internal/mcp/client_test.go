@@ -68,10 +68,10 @@ func TestOutlineMCPIntegration(t *testing.T) {
 
 	tools, err := client.ListTools(ctx)
 	require.NoError(t, err)
-	
+
 	// We expect the outline server to have some tools
 	assert.NotEmpty(t, tools)
-	
+
 	t.Logf("Found %d tools from Outline MCP", len(tools))
 	for _, tool := range tools {
 		t.Logf("Tool: %s - %s", tool.Name, tool.Description)
