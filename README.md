@@ -33,13 +33,29 @@ LinkLog creates a "Networking" collection with the following hierarchy:
                 - Date: [Topic] - [Outcome] - [Next Step]
 
 ## 🛠️ Configuration
-The bot requires the following environment variables:
+The bot requires the following environment variables (see `.env.example`):
 - `TELEGRAM_BOT_TOKEN`: Your bot token from @BotFather.
 - `OUTLINE_API_KEY`: API key from your Outline instance.
 - `OUTLINE_BASE_URL`: The URL of your Outline instance.
+- `OUTLINE_COLLECTION_ID`: ID of the Outline collection the LLM agent is allowed to manage.
 - `LLM_API_KEY`: API key for OpenAI or compatible provider.
 - `LLM_BASE_URL`: Endpoint for the LLM API.
 - `LLM_MODEL`: The specific model to use (e.g., `gpt-4o`).
+- `SCHEDULE_DOC_ID`: ID of the Outline document used as the follow-up "schedule table".
+
+## 🧩 How It Works
+- **LLM Agent (via MCP)**: The bot connects to an Outline [Model Context Protocol](https://modelcontextprotocol.io/) server and exposes the Outline tools to the LLM. The agent autonomously creates, updates, and organizes documents within the configured collection.
+- **Bot State (via Outline REST)**: The bot itself uses Outline's REST API to maintain a "schedule table" document that maps each contact to a follow-up date.
+- **Scheduler**: A cron job runs every 2 hours, parses the schedule table, and sends Telegram notifications for due follow-ups.
+
+## 🚀 Deployment
+A `Dockerfile` and `docker-compose.yml` are provided.
+
+```bash
+cp .env.example .env
+# fill in tokens and IDs
+docker compose up -d --build
+```
 
 ## 🚶 Workflow
 1. **Initial Input**: Tell the bot: "Met Alex from Stripe today. We talked about Go microservices. He likes kite-surfing. We should sync again in a month."

@@ -93,7 +93,7 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 
 ### Task 8: Update documentation
 
-- [ ] update README.md if user-facing changes
-- [ ] update CLAUDE.md if internal patterns changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md if user-facing changes
+- [x] update CLAUDE.md if internal patterns changed (skipped - file does not exist)
+- [x] move this plan to `docs/plans/completed/`
 ---
