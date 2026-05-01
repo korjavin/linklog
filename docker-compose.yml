@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  linklog:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    # To run an Outline MCP server locally, you could define it as another service here
+    # or rely on a globally available server on your host/network.

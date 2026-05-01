@@ -21,12 +21,12 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 - Modify: `go.mod` (new)
 - Create: `cmd/linklog/main.go`, `internal/config/config.go`, `Dockerfile`, `docker-compose.yml`, `.env.example`
 
-- [ ] Initialize Go module (`go mod init github.com/korjavin/linklog`)
-- [ ] Create `.env.example` with required variables (`TELEGRAM_BOT_TOKEN`, `OUTLINE_API_KEY`, `OUTLINE_BASE_URL`, `OUTLINE_COLLECTION_ID`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `SCHEDULE_DOC_ID`)
-- [ ] Implement `internal/config/config.go` to parse environment variables using `godotenv`
-- [ ] Create a skeleton `cmd/linklog/main.go`
-- [ ] Create `Dockerfile` and `docker-compose.yml` (including MCP server if necessary)
-- [ ] Run basic build to verify compilation
+- [x] Initialize Go module (`go mod init github.com/korjavin/linklog`)
+- [x] Create `.env.example` with required variables (`TELEGRAM_BOT_TOKEN`, `OUTLINE_API_KEY`, `OUTLINE_BASE_URL`, `OUTLINE_COLLECTION_ID`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `SCHEDULE_DOC_ID`)
+- [x] Implement `internal/config/config.go` to parse environment variables using `godotenv`
+- [x] Create a skeleton `cmd/linklog/main.go`
+- [x] Create `Dockerfile` and `docker-compose.yml` (including MCP server if necessary)
+- [x] Run basic build to verify compilation
 
 ### Task 2: MCP Client Integration (for LLM Agent)
 
