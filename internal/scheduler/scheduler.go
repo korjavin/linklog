@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,22 @@ func (s *Scheduler) Stop() {
 	s.cron.Stop()
 }
 
+// notifiedRetention bounds how far back we keep entries in notifiedOn. Once a
+// scheduled date is older than this, the user has either acted on it (updating
+// the date in the doc, which produces a new key) or it has gone stale — either
+// way, the old notification record is no longer load-bearing and would only
+// grow the map without bound.
+const notifiedRetention = 90 * 24 * time.Hour
+
 func (s *Scheduler) checkSchedule() {
+	// Hold the lock for the entire run. The function is invoked at most every
+	// 2h by cron plus once at startup; serializing the body removes the
+	// read-then-write race on notifiedOn (where two concurrent runs could each
+	// observe `already == false` and double-notify) and lets us prune the map
+	// safely in the same critical section.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -58,29 +74,50 @@ func (s *Scheduler) checkSchedule() {
 		return
 	}
 
-	today := time.Now().Format("2006-01-02")
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	s.pruneNotifiedLocked(now)
+
 	for _, entry := range outline.ParseScheduleTable(doc.Text) {
-		parsed, err := time.Parse("2006-01-02", entry.Date)
-		if err != nil {
+		if _, err := time.Parse("2006-01-02", entry.Date); err != nil {
 			log.Printf("Scheduler: skipping %q with unparseable date %q", entry.Contact, entry.Date)
 			continue
 		}
-		if parsed.Format("2006-01-02") > today {
+		// ISO-8601 dates sort lexically, so a string compare is equivalent to a
+		// time compare here and avoids a redundant Format round-trip.
+		if entry.Date > today {
 			continue
 		}
 		key := entry.Contact + "|" + entry.Date
-		s.mu.Lock()
-		already := s.notifiedOn[key]
-		s.mu.Unlock()
-		if already {
+		if s.notifiedOn[key] {
 			continue
 		}
 		if err := s.tgBot.Notify(fmt.Sprintf("Reminder: time to follow up with %s (scheduled %s)", entry.Contact, entry.Date)); err != nil {
 			// Don't mark as notified — let the next tick retry.
 			continue
 		}
-		s.mu.Lock()
 		s.notifiedOn[key] = true
-		s.mu.Unlock()
+	}
+}
+
+// pruneNotifiedLocked drops notification records whose date is older than
+// notifiedRetention. Caller must hold s.mu.
+func (s *Scheduler) pruneNotifiedLocked(now time.Time) {
+	cutoff := now.Add(-notifiedRetention)
+	for key := range s.notifiedOn {
+		// key format: "contact|YYYY-MM-DD"
+		idx := strings.LastIndex(key, "|")
+		if idx < 0 {
+			continue
+		}
+		dateStr := key[idx+1:]
+		parsed, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			delete(s.notifiedOn, key)
+			continue
+		}
+		if parsed.Before(cutoff) {
+			delete(s.notifiedOn, key)
+		}
 	}
 }
