@@ -17,4 +17,7 @@ RUN apk --no-cache add ca-certificates tzdata \
 WORKDIR /app
 COPY --from=builder /linklog /app/linklog
 
+RUN chown -R node:node /app
+USER node
+
 CMD ["/app/linklog"]
