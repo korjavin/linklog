@@ -97,7 +97,7 @@ func (s *Scheduler) checkSchedule() {
 		}
 
 		msg := s.buildReminderMessage(entry.Contact, entry.Date)
-		if err := s.tgBot.Notify(msg); err != nil {
+		if err := s.tgBot.NotifyWithButtons(entry.Contact, msg); err != nil {
 			// Don't mark as notified — let the next tick retry.
 			continue
 		}

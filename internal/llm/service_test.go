@@ -71,6 +71,30 @@ func TestParseFollowUpIgnoresPastDateInJSON(t *testing.T) {
 	assert.Equal(t, "2026-12-31", fu.Date)
 }
 
+func TestExtractFollowUpStripsLineAndParses(t *testing.T) {
+	text := "I've updated the Alex document.\nFOLLOWUP:{\"contact\":\"Alex\",\"date\":\"2026-08-01\"}"
+	cleaned, fu := extractFollowUp(text, "2026-12-31")
+	assert.Equal(t, "I've updated the Alex document.", cleaned)
+	assert.Equal(t, "Alex", fu.Contact)
+	assert.Equal(t, "2026-08-01", fu.Date)
+}
+
+func TestExtractFollowUpNoLineReturnsEmpty(t *testing.T) {
+	text := "Done, no follow-up needed."
+	cleaned, fu := extractFollowUp(text, "2026-12-31")
+	assert.Equal(t, "Done, no follow-up needed.", cleaned)
+	assert.Equal(t, "", fu.Contact)
+	assert.Equal(t, "", fu.Date)
+}
+
+func TestExtractFollowUpTrimsTrailingWhitespace(t *testing.T) {
+	text := "Updated.\n\nFOLLOWUP:{\"contact\":\"Bob\",\"date\":\"none\"}\n\n"
+	cleaned, fu := extractFollowUp(text, "2026-12-31")
+	assert.Equal(t, "Updated.", cleaned)
+	assert.Equal(t, "Bob", fu.Contact)
+	assert.Equal(t, "", fu.Date) // "none" maps to empty
+}
+
 func TestEnforceCollectionScopeRewritesAndInjects(t *testing.T) {
 	s := &Service{collectionID: "scoped-collection"}
 	schema := mcpgo.ToolInputSchema{

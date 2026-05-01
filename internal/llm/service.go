@@ -70,7 +70,12 @@ You have access to a single collection with ID: %s
 ALL document reads, creates, updates, deletes, moves, and comments MUST stay inside this collection.
 Never list, inspect, or modify other collections. Never operate on a documentId you have not first
 located inside the configured collection (e.g., via search or list scoped to the collection).
-When a tool accepts a collection identifier, always pass %[1]s explicitly.`, s.collectionID)
+When a tool accepts a collection identifier, always pass %[1]s explicitly.
+
+If the conversation involves scheduling a follow-up with a specific person, append exactly this as
+the very last line of your final response (no text after it):
+FOLLOWUP:{"contact":"<short name>","date":"<YYYY-MM-DD>"}
+Use "none" for date if no specific date is known. This line is stripped before showing your response.`, s.collectionID)
 
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -118,7 +123,6 @@ When a tool accepts a collection identifier, always pass %[1]s explicitly.`, s.c
 
 	if !completed {
 		finalReply = "I ran out of steps before finishing — please try again or break the request into smaller parts."
-		// Skip follow-up extraction: history is incomplete and may yield a misleading date.
 		return finalReply, FollowUp{}, nil
 	}
 
@@ -126,7 +130,8 @@ When a tool accepts a collection identifier, always pass %[1]s explicitly.`, s.c
 		finalReply = "Done."
 	}
 
-	followUp := s.askFollowUp(ctx, messages)
+	defaultDate := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+	finalReply, followUp := extractFollowUp(finalReply, defaultDate)
 	return finalReply, followUp, nil
 }
 
@@ -623,28 +628,26 @@ Do not use markdown headers or bullet lists — plain prose only, since it goes 
 	return "", fmt.Errorf("ran out of tool iterations without a final answer")
 }
 
-func (s *Service) askFollowUp(ctx context.Context, history []openai.ChatCompletionMessage) FollowUp {
-	defaultDate := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
-	prompt := fmt.Sprintf(`Based on the conversation above, respond with a single JSON object (no prose, no code fences) of the form:
-{"contact": "<short name of the contact or topic to follow up with>", "date": "YYYY-MM-DD"}
-If no follow-up is needed, set date to "none". If a date is implied but unclear, default to %s. Today is %s.`,
-		defaultDate, time.Now().Format("2006-01-02"))
-
-	messages := append([]openai.ChatCompletionMessage{}, history...)
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleUser,
-		Content: prompt,
-	})
-
-	resp, err := s.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    s.model,
-		Messages: messages,
-	})
-	if err != nil || len(resp.Choices) == 0 {
-		return FollowUp{Date: defaultDate}
+// extractFollowUp looks for a trailing "FOLLOWUP:{...}" line that the model
+// appends per the system prompt instruction. It strips the line from the
+// visible reply and parses the JSON into a FollowUp. If no line is found, the
+// reply is returned unchanged and an empty FollowUp is returned.
+func extractFollowUp(text, defaultDate string) (string, FollowUp) {
+	lines := strings.Split(text, "\n")
+	// Search from the bottom — the sentinel should be the very last line.
+	for i := len(lines) - 1; i >= max(0, len(lines)-10); i-- {
+		line := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(line, "FOLLOWUP:") {
+			continue
+		}
+		jsonPart := strings.TrimPrefix(line, "FOLLOWUP:")
+		fu := parseFollowUp(strings.TrimSpace(jsonPart), defaultDate)
+		// Rebuild text without the FOLLOWUP line, trimming trailing whitespace.
+		kept := append(append([]string(nil), lines[:i]...), lines[i+1:]...)
+		cleaned := strings.TrimRight(strings.Join(kept, "\n"), " \n\t")
+		return cleaned, fu
 	}
-
-	return parseFollowUp(resp.Choices[0].Message.Content, defaultDate)
+	return strings.TrimRight(text, " \n\t"), FollowUp{}
 }
 
 var (
