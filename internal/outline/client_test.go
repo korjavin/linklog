@@ -82,6 +82,19 @@ func TestScheduleTable(t *testing.T) {
 	}
 }
 
+func TestParseScheduleTableWithoutSeparatorTreatsAllRowsAsData(t *testing.T) {
+	text := `| Alice | 2026-05-10 |
+| Bob | 2026-06-01 |
+`
+	entries := ParseScheduleTable(text)
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries when no separator row, got %d", len(entries))
+	}
+	if entries[0].Contact != "Alice" || entries[1].Contact != "Bob" {
+		t.Errorf("Unexpected entries: %+v", entries)
+	}
+}
+
 func TestParseScheduleTableKeepsRowsContainingContactWord(t *testing.T) {
 	text := `| Contact | Next Contact Date |
 | --- | --- |

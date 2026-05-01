@@ -138,7 +138,7 @@ func (b *Bot) Stop() {
 // Notify sends a message to the configured admin chat. Returns an error if
 // the send fails so callers can decide whether to retry.
 func (b *Bot) Notify(message string) error {
-	_, err := b.tb.Send(&telebot.Chat{ID: b.adminChatID}, message)
+	_, err := b.tb.Send(&telebot.Chat{ID: b.adminChatID}, truncateForTelegram(message))
 	if err != nil {
 		log.Printf("Failed to notify admin: %v", err)
 	}

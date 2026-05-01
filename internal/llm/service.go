@@ -198,7 +198,11 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 	}
 
 	if _, err := time.Parse("2006-01-02", fu.Date); err != nil {
-		if m := dateRegex.FindString(raw); m != "" {
+		// Only accept a date extracted from prose if it is today or in the future.
+		// Past dates in prose are usually historical references ("last met 2025-01-15"),
+		// not the next-contact date we're trying to capture.
+		today := time.Now().Format("2006-01-02")
+		if m := dateRegex.FindString(raw); m != "" && m >= today {
 			if _, err := time.Parse("2006-01-02", m); err == nil {
 				fu.Date = m
 				return fu

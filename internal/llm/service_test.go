@@ -38,8 +38,16 @@ func TestParseFollowUpInvalidDateFallsBack(t *testing.T) {
 }
 
 func TestParseFollowUpExtractsDateFromProse(t *testing.T) {
-	fu := parseFollowUp("Sure, let's say 2026-06-15.", "2026-12-31")
-	assert.Equal(t, "2026-06-15", fu.Date)
+	future := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	fu := parseFollowUp("Sure, let's say "+future+".", "2026-12-31")
+	assert.Equal(t, future, fu.Date)
+}
+
+func TestParseFollowUpIgnoresPastDateInProse(t *testing.T) {
+	// A past date mentioned in prose (e.g., "last met on 2020-01-15") should not
+	// be picked up as the next-contact date — fall back to the default instead.
+	fu := parseFollowUp("We last met on 2020-01-15, see you again soon.", "2026-12-31")
+	assert.Equal(t, "2026-12-31", fu.Date)
 }
 
 func TestLLMServiceIntegration(t *testing.T) {

@@ -108,20 +108,31 @@ func isSeparatorRow(line string) bool {
 }
 
 func ParseScheduleTable(text string) []ScheduleEntry {
-	var entries []ScheduleEntry
-	headerSeen := false
+	var pipeLines []string
 	for _, raw := range strings.Split(text, "\n") {
 		line := strings.TrimSpace(raw)
-		if !strings.HasPrefix(line, "|") {
-			continue
+		if strings.HasPrefix(line, "|") {
+			pipeLines = append(pipeLines, line)
 		}
+	}
+
+	// If a GFM separator row exists, the row immediately before it is the header
+	// and must be skipped. If no separator exists, treat every pipe row as data
+	// (so the first contact row isn't silently dropped).
+	sepIdx := -1
+	for i, line := range pipeLines {
 		if isSeparatorRow(line) {
-			headerSeen = true
+			sepIdx = i
+			break
+		}
+	}
+
+	var entries []ScheduleEntry
+	for i, line := range pipeLines {
+		if i == sepIdx {
 			continue
 		}
-		if !headerSeen {
-			// First pipe-row before the separator is treated as the header.
-			headerSeen = true
+		if sepIdx > 0 && i == sepIdx-1 {
 			continue
 		}
 		parts := strings.Split(line, "|")
