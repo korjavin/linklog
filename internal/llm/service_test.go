@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -477,16 +476,7 @@ func TestLLMServiceIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Minimal env for the MCP subprocess — do not pass os.Environ() because it
-	// would leak unrelated secrets (TELEGRAM_BOT_TOKEN, LLM_API_KEY, ...) loaded
-	// from .env into the third-party `npx` process.
-	mcpEnv := []string{
-		"OUTLINE_API_KEY=" + outlineKey,
-		"OUTLINE_API_URL=" + strings.TrimSuffix(outlineURL, "/") + "/api",
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + os.Getenv("HOME"),
-	}
-	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "--package=outline-mcp-server", "outline-mcp-server-stdio"}, mcpEnv)
+	mcpClient, err := mcp.NewHTTPClient(ctx, outlineURL, outlineKey)
 	require.NoError(t, err)
 	defer func() { _ = mcpClient.Close() }()
 

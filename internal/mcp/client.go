@@ -4,33 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
+	"strings"
 
-	"github.com/mark3labs/mcp-go/client"
+	mcplib "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sashabaranov/go-openai"
 )
 
 type Client struct {
-	mcpClient client.MCPClient
+	mcpClient mcplib.MCPClient
 	cancel    context.CancelFunc
 }
 
-func NewClient(ctx context.Context, command string, args []string, env []string) (*Client, error) {
+// NewHTTPClient connects to an Outline MCP server over HTTP (SSE or streamable-HTTP).
+// baseURL should be the Outline base URL (e.g. https://outline.example.com); the
+// /api/mcp path is appended automatically. apiKey is sent as a Bearer token.
+func NewHTTPClient(ctx context.Context, baseURL, apiKey string) (*Client, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	// Use a custom command factory to avoid mcp-go's default behavior of
-	// appending os.Environ() to the env passed in. The parent process holds
-	// secrets (Telegram bot token, LLM API key, etc.) that have no business
-	// reaching the third-party MCP subprocess.
-	cmdFunc := func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
-		cmd := exec.CommandContext(ctx, command, args...)
-		cmd.Env = env
-		return cmd, nil
+	endpoint := strings.TrimSuffix(baseURL, "/") + "/mcp"
+	headers := map[string]string{
+		"Authorization": "Bearer " + apiKey,
 	}
 
-	mcpClient, err := client.NewStdioMCPClientWithOptions(command, env, args, transport.WithCommandFunc(cmdFunc))
+	mcpClient, err := mcplib.NewStreamableHttpClient(endpoint, transport.WithHTTPHeaders(headers))
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create MCP client: %w", err)

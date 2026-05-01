@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/korjavin/linklog/internal/bot"
@@ -28,15 +27,7 @@ func main() {
 	ctx := context.Background()
 
 	outClient := outline.NewClient(cfg.OutlineAPIKey, cfg.OutlineBaseURL)
-	mcpEnv := []string{
-		"OUTLINE_API_KEY=" + cfg.OutlineAPIKey,
-		// outline-mcp-server reads OUTLINE_API_URL (not OUTLINE_BASE_URL) and
-		// expects it to include the /api suffix.
-		"OUTLINE_API_URL=" + strings.TrimSuffix(cfg.OutlineBaseURL, "/") + "/api",
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + os.Getenv("HOME"),
-	}
-	mcpClient, err := mcp.NewClient(ctx, "outline-mcp-server-stdio", nil, mcpEnv)
+	mcpClient, err := mcp.NewHTTPClient(ctx, cfg.OutlineBaseURL, cfg.OutlineAPIKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP client: %v", err)
 	}
