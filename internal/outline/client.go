@@ -145,3 +145,44 @@ func SerializeScheduleTable(entries []ScheduleEntry) string {
 	}
 	return sb.String()
 }
+
+// ReplaceScheduleTable replaces the first markdown table region in text with newTable,
+// preserving any content above or below it. If text contains no table, newTable is appended.
+func ReplaceScheduleTable(text, newTable string) string {
+	if text == "" {
+		return newTable
+	}
+	lines := strings.Split(text, "\n")
+	tableStart := -1
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "|") {
+			tableStart = i
+			break
+		}
+	}
+	if tableStart == -1 {
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		return text + newTable
+	}
+	tableEnd := tableStart
+	for i := tableStart; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "|") {
+			tableEnd = i
+		} else {
+			break
+		}
+	}
+
+	var sb strings.Builder
+	if tableStart > 0 {
+		sb.WriteString(strings.Join(lines[:tableStart], "\n"))
+		sb.WriteString("\n")
+	}
+	sb.WriteString(newTable)
+	if tableEnd+1 < len(lines) {
+		sb.WriteString(strings.Join(lines[tableEnd+1:], "\n"))
+	}
+	return sb.String()
+}

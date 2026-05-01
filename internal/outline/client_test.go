@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -92,5 +93,60 @@ func TestParseScheduleTableKeepsRowsContainingContactWord(t *testing.T) {
 	}
 	if entries[0].Contact != "Acme Contact Sales" {
 		t.Errorf("Unexpected entry: %+v", entries[0])
+	}
+}
+
+func TestReplaceScheduleTablePreservesSurroundingContent(t *testing.T) {
+	original := `# Follow-up Schedule
+
+This document tracks contacts to follow up with.
+
+| Contact | Next Contact Date |
+| --- | --- |
+| Alice | 2026-05-10 |
+
+Notes: keep this list trimmed.
+`
+	newTable := SerializeScheduleTable([]ScheduleEntry{
+		{Contact: "Alice", Date: "2026-05-10"},
+		{Contact: "Bob", Date: "2026-06-01"},
+	})
+
+	result := ReplaceScheduleTable(original, newTable)
+
+	for _, expected := range []string{
+		"# Follow-up Schedule",
+		"This document tracks contacts to follow up with.",
+		"Notes: keep this list trimmed.",
+		"| Bob | 2026-06-01 |",
+	} {
+		if !strings.Contains(result, expected) {
+			t.Errorf("expected result to contain %q, got:\n%s", expected, result)
+		}
+	}
+
+	// Re-parsing the result should yield the new entries.
+	entries := ParseScheduleTable(result)
+	if len(entries) != 2 || entries[1].Contact != "Bob" {
+		t.Errorf("re-parse mismatch: %+v", entries)
+	}
+}
+
+func TestReplaceScheduleTableAppendsWhenNoTable(t *testing.T) {
+	original := "# Schedule\n\nNo table yet.\n"
+	newTable := SerializeScheduleTable([]ScheduleEntry{{Contact: "Alice", Date: "2026-05-10"}})
+
+	result := ReplaceScheduleTable(original, newTable)
+
+	if !strings.Contains(result, "# Schedule") || !strings.Contains(result, "| Alice | 2026-05-10 |") {
+		t.Errorf("expected appended table, got:\n%s", result)
+	}
+}
+
+func TestReplaceScheduleTableEmptyDoc(t *testing.T) {
+	newTable := SerializeScheduleTable([]ScheduleEntry{{Contact: "Alice", Date: "2026-05-10"}})
+	result := ReplaceScheduleTable("", newTable)
+	if result != newTable {
+		t.Errorf("expected newTable for empty doc, got: %q", result)
 	}
 }

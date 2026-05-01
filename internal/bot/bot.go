@@ -123,7 +123,8 @@ func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
 		entries = append(entries, outline.ScheduleEntry{Contact: contact, Date: date})
 	}
 
-	return b.outClient.UpdateDocument(ctx, b.scheduleDoc, outline.SerializeScheduleTable(entries))
+	newTable := outline.SerializeScheduleTable(entries)
+	return b.outClient.UpdateDocument(ctx, b.scheduleDoc, outline.ReplaceScheduleTable(doc.Text, newTable))
 }
 
 func (b *Bot) Start() {
