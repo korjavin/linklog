@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/korjavin/linklog/internal/bot"
+	"github.com/korjavin/linklog/internal/llm"
 	"github.com/korjavin/linklog/internal/outline"
 	"github.com/robfig/cron/v3"
 )
@@ -17,6 +18,7 @@ type Scheduler struct {
 	cron        *cron.Cron
 	outClient   *outline.Client
 	tgBot       *bot.Bot
+	llmService  *llm.Service
 	scheduleDoc string
 
 	mu sync.Mutex
@@ -26,11 +28,12 @@ type Scheduler struct {
 	notifiedOn map[string]bool
 }
 
-func NewScheduler(outClient *outline.Client, tgBot *bot.Bot, scheduleDoc string) *Scheduler {
+func NewScheduler(outClient *outline.Client, tgBot *bot.Bot, llmService *llm.Service, scheduleDoc string) *Scheduler {
 	return &Scheduler{
 		cron:        cron.New(),
 		outClient:   outClient,
 		tgBot:       tgBot,
+		llmService:  llmService,
 		scheduleDoc: scheduleDoc,
 		notifiedOn:  make(map[string]bool),
 	}
@@ -92,12 +95,38 @@ func (s *Scheduler) checkSchedule() {
 		if s.notifiedOn[key] {
 			continue
 		}
-		if err := s.tgBot.Notify(fmt.Sprintf("Reminder: time to follow up with %s (scheduled %s)", entry.Contact, entry.Date)); err != nil {
+
+		msg := s.buildReminderMessage(entry.Contact, entry.Date)
+		if err := s.tgBot.Notify(msg); err != nil {
 			// Don't mark as notified — let the next tick retry.
 			continue
 		}
 		s.notifiedOn[key] = true
 	}
+}
+
+const enrichTimeout = 90 * time.Second
+
+// buildReminderMessage composes the full notification text. It calls the LLM
+// to search Outline for context about the contact; on failure it falls back to
+// a plain reminder so the notification is never silently dropped.
+func (s *Scheduler) buildReminderMessage(contact, date string) string {
+	header := fmt.Sprintf("Reminder: follow up with %s (scheduled %s)", contact, date)
+	if s.llmService == nil {
+		return header
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), enrichTimeout)
+	defer cancel()
+
+	summary, err := s.llmService.EnrichReminder(ctx, contact, date)
+	if err != nil {
+		log.Printf("Scheduler: failed to enrich reminder for %q: %v", contact, err)
+		return header
+	}
+	if summary == "" {
+		return header
+	}
+	return header + "\n\n" + summary
 }
 
 // pruneNotifiedLocked drops notification records whose date is older than

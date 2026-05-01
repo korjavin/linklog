@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("Failed to create bot: %v", err)
 	}
 
-	sched := scheduler.NewScheduler(outClient, tgBot, cfg.ScheduleDocID)
+	sched := scheduler.NewScheduler(outClient, tgBot, llmService, cfg.ScheduleDocID)
 	if err := sched.Start(); err != nil {
 		log.Fatalf("Failed to start scheduler: %v", err)
 	}

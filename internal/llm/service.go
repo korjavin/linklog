@@ -544,6 +544,85 @@ func looksLikeDocumentIDKey(propName, toolName string) bool {
 	return false
 }
 
+// EnrichReminder searches the Outline knowledge base for context about the
+// given contact and returns a concise summary suitable for a Telegram reminder.
+// Falls back to an empty string on error so callers can degrade gracefully.
+func (s *Service) EnrichReminder(ctx context.Context, contact, date string) (string, error) {
+	tools, err := s.mcpClient.ListTools(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list tools: %w", err)
+	}
+
+	schemas := make(map[string]mcpgo.ToolInputSchema, len(tools))
+	var openaiTools []openai.Tool
+	for _, t := range tools {
+		if !s.toolAllowed(t) {
+			continue
+		}
+		schemas[t.Name] = t.InputSchema
+		fn := mcp.ToolToOpenAIFunction(t)
+		openaiTools = append(openaiTools, openai.Tool{
+			Type:     openai.ToolTypeFunction,
+			Function: &fn,
+		})
+	}
+
+	systemPrompt := fmt.Sprintf(`You are preparing a Telegram reminder notification. Search the Outline knowledge base for documents related to the contact below and summarize what I should know before reaching out.
+
+Collection ID (always pass this when tools accept a collection parameter): %s
+
+Respond with a concise 2-4 sentence summary that includes:
+- Who/what this contact is about
+- The main open topic or action item to follow up on
+- A direct link (URL) to the most relevant document if you can find one
+
+Do not use markdown headers or bullet lists — plain prose only, since it goes into a push notification.`, s.collectionID)
+
+	userPrompt := fmt.Sprintf("Contact: %s\nFollow-up scheduled: %s\n\nSearch for relevant documents and summarize what to discuss.", contact, date)
+
+	messages := []openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+	}
+
+	for i := 0; i < maxToolIterations; i++ {
+		req := openai.ChatCompletionRequest{
+			Model:    s.model,
+			Messages: messages,
+		}
+		if len(openaiTools) > 0 {
+			req.Tools = openaiTools
+		}
+
+		resp, err := s.client.CreateChatCompletion(ctx, req)
+		if err != nil {
+			return "", fmt.Errorf("chat completion: %w", err)
+		}
+		if len(resp.Choices) == 0 {
+			return "", fmt.Errorf("LLM returned no choices")
+		}
+
+		msg := resp.Choices[0].Message
+		messages = append(messages, msg)
+
+		if len(msg.ToolCalls) == 0 {
+			return strings.TrimSpace(msg.Content), nil
+		}
+
+		for _, toolCall := range msg.ToolCalls {
+			result := s.executeToolCall(ctx, toolCall, schemas)
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:       openai.ChatMessageRoleTool,
+				Content:    result,
+				Name:       toolCall.Function.Name,
+				ToolCallID: toolCall.ID,
+			})
+		}
+	}
+
+	return "", fmt.Errorf("ran out of tool iterations without a final answer")
+}
+
 func (s *Service) askFollowUp(ctx context.Context, history []openai.ChatCompletionMessage) FollowUp {
 	defaultDate := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 	prompt := fmt.Sprintf(`Based on the conversation above, respond with a single JSON object (no prose, no code fences) of the form:
