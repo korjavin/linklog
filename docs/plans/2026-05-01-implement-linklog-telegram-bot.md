@@ -55,12 +55,12 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 **Files:**
 - Create: `internal/llm/service.go`, `internal/llm/service_test.go`
 
-- [ ] Integrate `github.com/sashabaranov/go-openai`
-- [ ] Define the system prompt for the MCP-enabled agent to manage Outline content (passing `OUTLINE_COLLECTION_ID` to restrict scope/context)
-- [ ] Implement the tool-calling loop: executing MCP tools autonomously
-- [ ] Implement a specific prompt/function to ask the LLM for a "suggested date of next contact" after it finishes processing a document
-- [ ] Write integration tests for the LLM service
-- [ ] Run project test suite - must pass before task 5
+- [x] Integrate `github.com/sashabaranov/go-openai`
+- [x] Define the system prompt for the MCP-enabled agent to manage Outline content (passing `OUTLINE_COLLECTION_ID` to restrict scope/context)
+- [x] Implement the tool-calling loop: executing MCP tools autonomously
+- [x] Implement a specific prompt/function to ask the LLM for a "suggested date of next contact" after it finishes processing a document
+- [x] Write integration tests for the LLM service
+- [x] Run project test suite - must pass before task 5
 
 ### Task 5: Telegram Bot Foundation & Flow
 
