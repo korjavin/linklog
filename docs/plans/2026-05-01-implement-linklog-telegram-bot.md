@@ -33,11 +33,11 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 **Files:**
 - Create: `internal/mcp/client.go`, `internal/mcp/client_test.go`
 
-- [ ] Integrate a Go MCP client (e.g., `github.com/mark3labs/mcp-go`)
-- [ ] Configure the client to connect to the Outline MCP server
-- [ ] Implement tool fetching and mapping into OpenAI function definitions
-- [ ] Write integration tests for MCP tool discovery
-- [ ] Run project test suite - must pass before task 3
+- [x] Integrate a Go MCP client (e.g., `github.com/mark3labs/mcp-go`)
+- [x] Configure the client to connect to the Outline MCP server
+- [x] Implement tool fetching and mapping into OpenAI function definitions
+- [x] Write integration tests for MCP tool discovery
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Outline REST API Client (for Bot State)
 
