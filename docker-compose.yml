@@ -2,3 +2,13 @@ services:
   linklog:
     image: ghcr.io/korjavin/linklog:latest
     restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN
+      - TELEGRAM_ADMIN_CHAT_ID
+      - OUTLINE_API_KEY
+      - OUTLINE_BASE_URL
+      - OUTLINE_COLLECTION_ID
+      - LLM_API_KEY
+      - LLM_BASE_URL
+      - LLM_MODEL
+      - SCHEDULE_DOC_ID
