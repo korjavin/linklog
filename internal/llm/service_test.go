@@ -40,6 +40,14 @@ func TestParseFollowUpInvalidDateFallsBack(t *testing.T) {
 	assert.Equal(t, "2026-12-31", fu.Date)
 }
 
+func TestParseFollowUpEmptyDateInJSONIsNoFollowUp(t *testing.T) {
+	// When the model returns valid JSON with an empty date and a contact name,
+	// it almost certainly means "no follow-up" — not "use the default date for
+	// this contact". Make sure we don't synthesize defaultDate in that case.
+	fu := parseFollowUp(`{"contact":"Alice","date":""}`, "2026-12-31")
+	assert.Equal(t, "", fu.Date)
+}
+
 func TestParseFollowUpExtractsDateFromProse(t *testing.T) {
 	future := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
 	fu := parseFollowUp("Sure, let's say "+future+".", "2026-12-31")

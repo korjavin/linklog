@@ -592,13 +592,22 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 			candidate = m
 		}
 	}
+	jsonOK := false
 	if err := json.Unmarshal([]byte(candidate), &parsed); err == nil {
+		jsonOK = true
 		fu.Contact = strings.TrimSpace(parsed.Contact)
 		fu.Date = strings.TrimSpace(parsed.Date)
 	}
 
 	if strings.EqualFold(fu.Date, "none") {
 		fu.Date = ""
+		return fu
+	}
+
+	// JSON parsed but the model gave an empty date: treat as no follow-up rather
+	// than synthesizing defaultDate from a contact name. Otherwise the bot would
+	// upsert a reminder the model didn't ask for.
+	if jsonOK && fu.Date == "" {
 		return fu
 	}
 

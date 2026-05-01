@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/korjavin/linklog/internal/llm"
 	"github.com/korjavin/linklog/internal/outline"
@@ -15,7 +16,10 @@ import (
 
 const (
 	interactionTimeout = 2 * time.Minute
-	telegramMaxLen     = 4000
+	// telegramMaxUTF16 is Telegram's per-message cap, counted in UTF-16 code
+	// units (not bytes or runes). Non-BMP runes — most modern emoji, math
+	// symbols, some CJK extension blocks — take 2 code units each.
+	telegramMaxUTF16 = 4096
 )
 
 type Bot struct {
@@ -94,20 +98,41 @@ func (b *Bot) handleText(c telebot.Context) error {
 }
 
 func truncateForTelegram(s string) string {
-	// Telegram counts the message limit (4096) in UTF-16 code units, not bytes
-	// or runes. Counting by runes is a close-enough approximation that won't
-	// exceed the limit for BMP characters, and won't produce invalid UTF-8 by
-	// splitting a multi-byte rune mid-sequence (which a byte-based slice would).
-	runes := []rune(s)
-	if len(runes) <= telegramMaxLen {
+	const suffix = "\n\n[... truncated]"
+
+	// Walk once, counting UTF-16 code units. A rune-based count under-counts
+	// non-BMP characters (each takes 2 UTF-16 units), so a 4000-rune string of
+	// emoji is 8000 units — well over Telegram's 4096 limit, which makes the
+	// API reject the message and the user sees nothing.
+	totalUnits := 0
+	for _, r := range s {
+		totalUnits += utf16.RuneLen(r)
+	}
+	if totalUnits <= telegramMaxUTF16 {
 		return s
 	}
-	const suffix = "\n\n[... truncated]"
-	cutoff := telegramMaxLen - len([]rune(suffix))
-	if cutoff < 0 {
-		cutoff = 0
+
+	suffixUnits := 0
+	for _, r := range suffix {
+		suffixUnits += utf16.RuneLen(r)
 	}
-	return string(runes[:cutoff]) + suffix
+	budget := telegramMaxUTF16 - suffixUnits
+	if budget < 0 {
+		budget = 0
+	}
+
+	var b strings.Builder
+	used := 0
+	for _, r := range s {
+		c := utf16.RuneLen(r)
+		if used+c > budget {
+			break
+		}
+		b.WriteRune(r)
+		used += c
+	}
+	b.WriteString(suffix)
+	return b.String()
 }
 
 func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
