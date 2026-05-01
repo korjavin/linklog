@@ -27,7 +27,13 @@ func main() {
 	ctx := context.Background()
 
 	outClient := outline.NewClient(cfg.OutlineAPIKey, cfg.OutlineBaseURL)
-	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, os.Environ())
+	mcpEnv := []string{
+		"OUTLINE_API_KEY=" + cfg.OutlineAPIKey,
+		"OUTLINE_BASE_URL=" + cfg.OutlineBaseURL,
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+	}
+	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, mcpEnv)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP client: %v", err)
 	}

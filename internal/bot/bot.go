@@ -12,7 +12,10 @@ import (
 	"gopkg.in/telebot.v3"
 )
 
-const interactionTimeout = 2 * time.Minute
+const (
+	interactionTimeout = 2 * time.Minute
+	telegramMaxLen     = 4000
+)
 
 type Bot struct {
 	tb           *telebot.Bot
@@ -60,11 +63,11 @@ func (b *Bot) handleText(c telebot.Context) error {
 	finalReply, followUp, err := b.llmService.ProcessInteraction(ctx, c.Text())
 	if err != nil {
 		log.Printf("Error processing interaction: %v", err)
-		return c.Send(fmt.Sprintf("Sorry, I encountered an error: %v", err))
+		return c.Send("Sorry, I encountered an error processing your message. Check the bot logs for details.")
 	}
 
 	if followUp.Date != "" && followUp.Contact != "" {
-		if err := b.upsertSchedule(followUp.Contact, followUp.Date); err != nil {
+		if err := b.upsertSchedule(ctx, followUp.Contact, followUp.Date); err != nil {
 			log.Printf("Error updating schedule: %v", err)
 			finalReply += "\n\n(note: failed to record the follow-up reminder)"
 		}
@@ -73,11 +76,23 @@ func (b *Bot) handleText(c telebot.Context) error {
 	if finalReply == "" {
 		finalReply = "Done."
 	}
-	return c.Send(finalReply)
+	return c.Send(truncateForTelegram(finalReply))
 }
 
-func (b *Bot) upsertSchedule(contact, date string) error {
-	doc, err := b.outClient.GetDocument(b.scheduleDoc)
+func truncateForTelegram(s string) string {
+	if len(s) <= telegramMaxLen {
+		return s
+	}
+	const suffix = "\n\n[... truncated]"
+	cutoff := telegramMaxLen - len(suffix)
+	if cutoff < 0 {
+		cutoff = 0
+	}
+	return s[:cutoff] + suffix
+}
+
+func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
+	doc, err := b.outClient.GetDocument(ctx, b.scheduleDoc)
 	if err != nil {
 		return fmt.Errorf("failed to get schedule doc: %w", err)
 	}
@@ -96,7 +111,7 @@ func (b *Bot) upsertSchedule(contact, date string) error {
 		entries = append(entries, outline.ScheduleEntry{Contact: contact, Date: date})
 	}
 
-	return b.outClient.UpdateDocument(b.scheduleDoc, outline.SerializeScheduleTable(entries))
+	return b.outClient.UpdateDocument(ctx, b.scheduleDoc, outline.SerializeScheduleTable(entries))
 }
 
 func (b *Bot) Start() {

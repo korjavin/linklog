@@ -62,6 +62,7 @@ If creating or moving a document, default to placing it in the provided collecti
 	}
 
 	var finalReply string
+	completed := false
 	for i := 0; i < maxToolIterations; i++ {
 		req := openai.ChatCompletionRequest{
 			Model:    s.model,
@@ -84,6 +85,7 @@ If creating or moving a document, default to placing it in the provided collecti
 
 		if len(msg.ToolCalls) == 0 {
 			finalReply = msg.Content
+			completed = true
 			break
 		}
 
@@ -96,6 +98,12 @@ If creating or moving a document, default to placing it in the provided collecti
 				ToolCallID: toolCall.ID,
 			})
 		}
+	}
+
+	if !completed {
+		finalReply = "I ran out of steps before finishing — please try again or break the request into smaller parts."
+		// Skip follow-up extraction: history is incomplete and may yield a misleading date.
+		return finalReply, FollowUp{}, nil
 	}
 
 	if finalReply == "" {
@@ -116,12 +124,12 @@ func (s *Service) executeToolCall(ctx context.Context, toolCall openai.ToolCall)
 	if err != nil {
 		return fmt.Sprintf("Tool call failed: %v", err)
 	}
-	if result.IsError {
-		return "Tool returned error"
-	}
 	b, err := json.Marshal(result.Content)
 	if err != nil {
 		return fmt.Sprintf("Failed to serialize tool result: %v", err)
+	}
+	if result.IsError {
+		return fmt.Sprintf("Tool returned error: %s", string(b))
 	}
 	return string(b)
 }
@@ -150,7 +158,11 @@ If no follow-up is needed, set date to "none". If a date is implied but unclear,
 	return parseFollowUp(resp.Choices[0].Message.Content, defaultDate)
 }
 
-var dateRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2})\b`)
+var (
+	dateRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2})\b`)
+	jsonRegex = regexp.MustCompile(`(?s)\{.*\}`)
+	noneRegex = regexp.MustCompile(`(?i)\bnone\b`)
+)
 
 func parseFollowUp(raw, defaultDate string) FollowUp {
 	raw = strings.TrimSpace(raw)
@@ -164,13 +176,24 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 		Date    string `json:"date"`
 	}
 	fu := FollowUp{}
-	if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
+	candidate := raw
+	if !strings.HasPrefix(candidate, "{") {
+		if m := jsonRegex.FindString(raw); m != "" {
+			candidate = m
+		}
+	}
+	if err := json.Unmarshal([]byte(candidate), &parsed); err == nil {
 		fu.Contact = strings.TrimSpace(parsed.Contact)
 		fu.Date = strings.TrimSpace(parsed.Date)
 	}
 
 	if strings.EqualFold(fu.Date, "none") {
 		fu.Date = ""
+		return fu
+	}
+
+	// If JSON parsing failed entirely and the prose explicitly says "none", treat as no follow-up.
+	if fu.Date == "" && fu.Contact == "" && noneRegex.MatchString(raw) {
 		return fu
 	}
 

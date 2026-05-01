@@ -37,25 +37,25 @@ type Document struct {
 	Text  string `json:"text"`
 }
 
-func (c *Client) GetDocument(id string) (*Document, error) {
+func (c *Client) GetDocument(ctx context.Context, id string) (*Document, error) {
 	var res DocumentResponse
-	if err := c.post("/api/documents.info", map[string]string{"id": id}, &res); err != nil {
+	if err := c.post(ctx, "/api/documents.info", map[string]string{"id": id}, &res); err != nil {
 		return nil, err
 	}
 	return &res.Data, nil
 }
 
-func (c *Client) UpdateDocument(id, text string) error {
-	return c.post("/api/documents.update", map[string]string{"id": id, "text": text}, nil)
+func (c *Client) UpdateDocument(ctx context.Context, id, text string) error {
+	return c.post(ctx, "/api/documents.update", map[string]string{"id": id, "text": text}, nil)
 }
 
-func (c *Client) post(path string, body, out interface{}) error {
+func (c *Client) post(ctx context.Context, path string, body, out interface{}) error {
 	reqBody, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewBuffer(reqBody))

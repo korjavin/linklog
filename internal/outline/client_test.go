@@ -1,6 +1,7 @@
 package outline
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ func TestGetDocument(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("test-key", server.URL)
-	doc, err := client.GetDocument("test-id")
+	doc, err := client.GetDocument(context.Background(), "test-id")
 	if err != nil {
 		t.Fatalf("Failed to get document: %v", err)
 	}
@@ -48,7 +49,7 @@ func TestUpdateDocument(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("test-key", server.URL)
-	err := client.UpdateDocument("test-id", "new text")
+	err := client.UpdateDocument(context.Background(), "test-id", "new text")
 	if err != nil {
 		t.Fatalf("Failed to update document: %v", err)
 	}
