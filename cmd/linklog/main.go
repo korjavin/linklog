@@ -38,7 +38,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP client: %v", err)
 	}
-	defer mcpClient.Close()
+	defer func() {
+		_ = mcpClient.Close()
+	}()
 	
 	openaiConfig := openai.DefaultConfig(cfg.LLMAPIKey)
 	openaiConfig.BaseURL = cfg.LLMBaseURL

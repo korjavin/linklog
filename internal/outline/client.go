@@ -48,7 +48,9 @@ func (c *Client) GetDocument(id string) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -81,7 +83,9 @@ func (c *Client) UpdateDocument(id, text string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -124,7 +128,7 @@ func SerializeScheduleTable(entries []ScheduleEntry) string {
 	sb.WriteString("| Contact | Next Contact Date |\n")
 	sb.WriteString("| --- | --- |\n")
 	for _, entry := range entries {
-		sb.WriteString(fmt.Sprintf("| %s | %s |\n", entry.Contact, entry.Date))
+		fmt.Fprintf(&sb, "| %s | %s |\n", entry.Contact, entry.Date)
 	}
 	return sb.String()
 }

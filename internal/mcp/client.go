@@ -38,6 +38,7 @@ func NewClient(ctx context.Context, command string, args []string, env []string)
 	}
 
 	if res.ProtocolVersion == "" {
+		cancel()
 		return nil, fmt.Errorf("initialization failed, no protocol version returned")
 	}
 

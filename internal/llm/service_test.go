@@ -42,7 +42,9 @@ func TestLLMServiceIntegration(t *testing.T) {
 
 	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, env)
 	require.NoError(t, err)
-	defer mcpClient.Close()
+	defer func() {
+		_ = mcpClient.Close()
+	}()
 
 	openaiConfig := openai.DefaultConfig(apiKey)
 	openaiConfig.BaseURL = baseURL

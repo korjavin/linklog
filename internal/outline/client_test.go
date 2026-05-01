@@ -23,7 +23,7 @@ func TestGetDocument(t *testing.T) {
 				Text:  "Test Text",
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

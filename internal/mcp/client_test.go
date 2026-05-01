@@ -57,7 +57,9 @@ func TestOutlineMCPIntegration(t *testing.T) {
 
 	client, err := NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, env)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	tools, err := client.ListTools(ctx)
 	require.NoError(t, err)

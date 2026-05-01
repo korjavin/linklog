@@ -88,8 +88,8 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] run full test suite (`go test ./...`)
-- [ ] run linter (`golangci-lint run`)
+- [x] run full test suite (`go test ./...`)
+- [x] run linter (`golangci-lint run`)
 
 ### Task 8: Update documentation
 
