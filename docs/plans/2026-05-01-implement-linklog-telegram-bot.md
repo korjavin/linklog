@@ -44,11 +44,11 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 **Files:**
 - Create: `internal/outline/client.go`, `internal/outline/client_test.go`
 
-- [ ] Implement basic HTTP client setup for Outline's REST API using `OUTLINE_API_KEY`
-- [ ] Implement methods to read and update a specific "schedule table" document (by ID or path)
-- [ ] Implement a helper to parse the schedule table into a Go struct (e.g., mapping user/contact to a follow-up date) and to serialize it back to markdown
-- [ ] Write integration tests for the Outline REST client
-- [ ] Run project test suite - must pass before task 4
+- [x] Implement basic HTTP client setup for Outline's REST API using `OUTLINE_API_KEY`
+- [x] Implement methods to read and update a specific "schedule table" document (by ID or path)
+- [x] Implement a helper to parse the schedule table into a Go struct (e.g., mapping user/contact to a follow-up date) and to serialize it back to markdown
+- [x] Write integration tests for the Outline REST client
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: LLM Agent Integration
 
