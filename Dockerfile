@@ -9,8 +9,10 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /linklog cmd/linklog/main.go
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates tzdata nodejs npm
+FROM alpine:3.20
+RUN apk --no-cache add ca-certificates tzdata nodejs npm \
+    && npm install -g @spicesh/mcp-outline \
+    && npm cache clean --force
 
 WORKDIR /app
 COPY --from=builder /linklog /app/linklog

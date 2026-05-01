@@ -71,13 +71,16 @@ func (s *Scheduler) checkSchedule() {
 		key := entry.Contact + "|" + entry.Date
 		s.mu.Lock()
 		already := s.notifiedOn[key]
-		if !already {
-			s.notifiedOn[key] = true
-		}
 		s.mu.Unlock()
 		if already {
 			continue
 		}
-		s.tgBot.Notify(fmt.Sprintf("Reminder: time to follow up with %s (scheduled %s)", entry.Contact, entry.Date))
+		if err := s.tgBot.Notify(fmt.Sprintf("Reminder: time to follow up with %s (scheduled %s)", entry.Contact, entry.Date)); err != nil {
+			// Don't mark as notified — let the next tick retry.
+			continue
+		}
+		s.mu.Lock()
+		s.notifiedOn[key] = true
+		s.mu.Unlock()
 	}
 }

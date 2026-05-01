@@ -56,6 +56,13 @@ func (b *Bot) handleText(c telebot.Context) error {
 		log.Printf("Rejected message from unauthorized sender %d", c.Sender().ID)
 		return nil
 	}
+	// Reject if not a private chat with the admin: prevents leaking responses
+	// to a group/channel that the admin happens to be a member of.
+	chat := c.Chat()
+	if chat == nil || chat.Type != telebot.ChatPrivate || chat.ID != b.adminChatID {
+		log.Print("Rejected message from non-private chat or wrong chat ID")
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), interactionTimeout)
 	defer cancel()
@@ -80,15 +87,20 @@ func (b *Bot) handleText(c telebot.Context) error {
 }
 
 func truncateForTelegram(s string) string {
-	if len(s) <= telegramMaxLen {
+	// Telegram counts the message limit (4096) in UTF-16 code units, not bytes
+	// or runes. Counting by runes is a close-enough approximation that won't
+	// exceed the limit for BMP characters, and won't produce invalid UTF-8 by
+	// splitting a multi-byte rune mid-sequence (which a byte-based slice would).
+	runes := []rune(s)
+	if len(runes) <= telegramMaxLen {
 		return s
 	}
 	const suffix = "\n\n[... truncated]"
-	cutoff := telegramMaxLen - len(suffix)
+	cutoff := telegramMaxLen - len([]rune(suffix))
 	if cutoff < 0 {
 		cutoff = 0
 	}
-	return s[:cutoff] + suffix
+	return string(runes[:cutoff]) + suffix
 }
 
 func (b *Bot) upsertSchedule(ctx context.Context, contact, date string) error {
@@ -122,9 +134,12 @@ func (b *Bot) Stop() {
 	b.tb.Stop()
 }
 
-// Notify sends a message to the configured admin chat.
-func (b *Bot) Notify(message string) {
-	if _, err := b.tb.Send(&telebot.Chat{ID: b.adminChatID}, message); err != nil {
+// Notify sends a message to the configured admin chat. Returns an error if
+// the send fails so callers can decide whether to retry.
+func (b *Bot) Notify(message string) error {
+	_, err := b.tb.Send(&telebot.Chat{ID: b.adminChatID}, message)
+	if err != nil {
 		log.Printf("Failed to notify admin: %v", err)
 	}
+	return err
 }
