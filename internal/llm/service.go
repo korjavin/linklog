@@ -616,18 +616,27 @@ func parseFollowUp(raw, defaultDate string) FollowUp {
 		return fu
 	}
 
-	if _, err := time.Parse("2006-01-02", fu.Date); err != nil {
-		// Only accept a date extracted from prose if it is today or in the future.
-		// Past dates in prose are usually historical references ("last met 2025-01-15"),
-		// not the next-contact date we're trying to capture.
-		today := time.Now().Format("2006-01-02")
-		if m := dateRegex.FindString(raw); m != "" && m >= today {
-			if _, err := time.Parse("2006-01-02", m); err == nil {
-				fu.Date = m
-				return fu
-			}
+	today := time.Now().Format("2006-01-02")
+	if _, err := time.Parse("2006-01-02", fu.Date); err == nil {
+		// Reject a JSON-parsed date that is in the past. The LLM may echo a
+		// historical date from the conversation ("last met on 2025-01-15") into
+		// the structured output instead of the next-contact date — without this
+		// guard, the bot writes that past date into the schedule and the
+		// scheduler fires an immediate reminder on the next tick.
+		if fu.Date < today {
+			fu.Date = defaultDate
 		}
-		fu.Date = defaultDate
+		return fu
 	}
+	// Only accept a date extracted from prose if it is today or in the future.
+	// Past dates in prose are usually historical references ("last met 2025-01-15"),
+	// not the next-contact date we're trying to capture.
+	if m := dateRegex.FindString(raw); m != "" && m >= today {
+		if _, err := time.Parse("2006-01-02", m); err == nil {
+			fu.Date = m
+			return fu
+		}
+	}
+	fu.Date = defaultDate
 	return fu
 }

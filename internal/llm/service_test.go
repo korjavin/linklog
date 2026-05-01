@@ -61,6 +61,17 @@ func TestParseFollowUpIgnoresPastDateInProse(t *testing.T) {
 	assert.Equal(t, "2026-12-31", fu.Date)
 }
 
+func TestParseFollowUpIgnoresPastDateInJSON(t *testing.T) {
+	// The LLM may echo a historical date from the conversation into the JSON
+	// `date` field (e.g., the user mentioned "we last met 2020-01-15"). Without
+	// rejection the bot would store that past date in the schedule, and the
+	// scheduler would fire an immediate reminder on the next tick. Fall back to
+	// the supplied defaultDate instead.
+	fu := parseFollowUp(`{"contact":"Alice","date":"2020-01-15"}`, "2026-12-31")
+	assert.Equal(t, "Alice", fu.Contact)
+	assert.Equal(t, "2026-12-31", fu.Date)
+}
+
 func TestEnforceCollectionScopeRewritesAndInjects(t *testing.T) {
 	s := &Service{collectionID: "scoped-collection"}
 	schema := mcpgo.ToolInputSchema{
