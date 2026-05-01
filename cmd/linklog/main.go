@@ -12,6 +12,7 @@ import (
 	"github.com/korjavin/linklog/internal/llm"
 	"github.com/korjavin/linklog/internal/mcp"
 	"github.com/korjavin/linklog/internal/outline"
+	"github.com/korjavin/linklog/internal/scheduler"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -51,6 +52,10 @@ func main() {
 		log.Fatalf("Failed to create bot: %v", err)
 	}
 
+	// Initialize and start Scheduler
+	sched := scheduler.NewScheduler(outClient, tgBot, cfg.ScheduleDocID)
+	sched.Start()
+
 	// Start bot in background
 	go tgBot.Start()
 
@@ -60,6 +65,7 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down...")
+	sched.Stop()
 	tgBot.Stop()
 	log.Println("Done.")
 }

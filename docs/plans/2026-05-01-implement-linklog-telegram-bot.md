@@ -79,12 +79,12 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 **Files:**
 - Create: `internal/scheduler/scheduler.go`
 
-- [ ] Integrate `github.com/robfig/cron/v3`
-- [ ] Implement a job that runs every 2 hours
-- [ ] The job uses the Outline REST client to read the "schedule table" document, parse the dates, and identify due follow-ups
-- [ ] Send Telegram notifications for any due interactions
-- [ ] Add the scheduler initialization to `cmd/linklog/main.go`
-- [ ] Run project test suite - must pass before task 7
+- [x] Integrate `github.com/robfig/cron/v3`
+- [x] Implement a job that runs every 2 hours
+- [x] The job uses the Outline REST client to read the "schedule table" document, parse the dates, and identify due follow-ups
+- [x] Send Telegram notifications for any due interactions
+- [x] Add the scheduler initialization to `cmd/linklog/main.go`
+- [x] Run project test suite - must pass before task 7
 
 ### Task 7: Verify acceptance criteria
 

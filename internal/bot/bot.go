@@ -17,6 +17,7 @@ type Bot struct {
 	llmService  *llm.Service
 	outClient   *outline.Client
 	scheduleDoc string
+	knownChats  map[string]int64
 }
 
 func NewBot(token string, llmService *llm.Service, outClient *outline.Client, scheduleDoc string) (*Bot, error) {
@@ -35,6 +36,7 @@ func NewBot(token string, llmService *llm.Service, outClient *outline.Client, sc
 		llmService:  llmService,
 		outClient:   outClient,
 		scheduleDoc: scheduleDoc,
+		knownChats:  make(map[string]int64),
 	}
 
 	b.setupHandlers()
@@ -54,6 +56,8 @@ func (b *Bot) handleText(c telebot.Context) error {
 	if senderName == "" {
 		senderName = c.Sender().FirstName
 	}
+	
+	b.knownChats[senderName] = c.Sender().ID
 
 	finalReply, suggestedDate, err := b.llmService.ProcessInteraction(ctx, userInput)
 	if err != nil {
@@ -142,4 +146,19 @@ func (b *Bot) Start() {
 func (b *Bot) Stop() {
 	log.Println("Bot stopping...")
 	b.tb.Stop()
+}
+
+func (b *Bot) Notify(contact, message string) {
+	if b.knownChats == nil {
+		return
+	}
+	id, ok := b.knownChats[contact]
+	if !ok {
+		log.Printf("Cannot notify %s, chat ID unknown", contact)
+		return
+	}
+	_, err := b.tb.Send(&telebot.User{ID: id}, message)
+	if err != nil {
+		log.Printf("Failed to notify %s: %v", contact, err)
+	}
 }
