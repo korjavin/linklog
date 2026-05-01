@@ -3,12 +3,14 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
 	TelegramBotToken    string
+	TelegramAdminChatID int64
 	OutlineAPIKey       string
 	OutlineBaseURL      string
 	OutlineCollectionID string
@@ -19,7 +21,7 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	_ = godotenv.Load() // Ignore error as .env is optional
+	_ = godotenv.Load()
 
 	cfg := &Config{
 		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
@@ -32,9 +34,29 @@ func Load() (*Config, error) {
 		ScheduleDocID:       os.Getenv("SCHEDULE_DOC_ID"),
 	}
 
-	if cfg.TelegramBotToken == "" {
-		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
+	required := map[string]string{
+		"TELEGRAM_BOT_TOKEN":    cfg.TelegramBotToken,
+		"OUTLINE_API_KEY":       cfg.OutlineAPIKey,
+		"OUTLINE_BASE_URL":      cfg.OutlineBaseURL,
+		"OUTLINE_COLLECTION_ID": cfg.OutlineCollectionID,
+		"LLM_API_KEY":           cfg.LLMAPIKey,
+		"SCHEDULE_DOC_ID":       cfg.ScheduleDocID,
 	}
+	for name, value := range required {
+		if value == "" {
+			return nil, fmt.Errorf("%s is required", name)
+		}
+	}
+
+	adminRaw := os.Getenv("TELEGRAM_ADMIN_CHAT_ID")
+	if adminRaw == "" {
+		return nil, fmt.Errorf("TELEGRAM_ADMIN_CHAT_ID is required")
+	}
+	adminID, err := strconv.ParseInt(adminRaw, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("TELEGRAM_ADMIN_CHAT_ID must be an integer: %w", err)
+	}
+	cfg.TelegramAdminChatID = adminID
 
 	if cfg.LLMModel == "" {
 		cfg.LLMModel = "gpt-4o"

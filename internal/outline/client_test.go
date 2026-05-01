@@ -72,10 +72,24 @@ func TestScheduleTable(t *testing.T) {
 	if !testing.Short() {
 		t.Logf("Serialized table:\n%s", serialized)
 	}
-	
+
 	// Re-parse and verify
 	reParsed := ParseScheduleTable(serialized)
 	if len(reParsed) != 2 {
 		t.Fatalf("Expected 2 entries after re-parse, got %d", len(reParsed))
+	}
+}
+
+func TestParseScheduleTableKeepsRowsContainingContactWord(t *testing.T) {
+	text := `| Contact | Next Contact Date |
+| --- | --- |
+| Acme Contact Sales | 2026-05-10 |
+`
+	entries := ParseScheduleTable(text)
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Contact != "Acme Contact Sales" {
+		t.Errorf("Unexpected entry: %+v", entries[0])
 	}
 }

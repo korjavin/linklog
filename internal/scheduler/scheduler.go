@@ -15,59 +15,54 @@ type Scheduler struct {
 	outClient   *outline.Client
 	tgBot       *bot.Bot
 	scheduleDoc string
+	// notifiedOn tracks "contact|date" strings we already notified for, to avoid spamming each cron tick.
+	notifiedOn map[string]bool
 }
 
 func NewScheduler(outClient *outline.Client, tgBot *bot.Bot, scheduleDoc string) *Scheduler {
-	c := cron.New()
 	return &Scheduler{
-		cron:        c,
+		cron:        cron.New(),
 		outClient:   outClient,
 		tgBot:       tgBot,
 		scheduleDoc: scheduleDoc,
+		notifiedOn:  make(map[string]bool),
 	}
 }
 
-func (s *Scheduler) Start() {
-	// Run every 2 hours
-	_, err := s.cron.AddFunc("@every 2h", s.checkSchedule)
-	if err != nil {
-		log.Printf("Failed to schedule job: %v", err)
-		return
+func (s *Scheduler) Start() error {
+	if _, err := s.cron.AddFunc("@every 2h", s.checkSchedule); err != nil {
+		return fmt.Errorf("failed to schedule job: %w", err)
 	}
-	log.Println("Scheduler started...")
 	s.cron.Start()
+	return nil
 }
 
 func (s *Scheduler) Stop() {
-	log.Println("Scheduler stopping...")
 	s.cron.Stop()
 }
 
 func (s *Scheduler) checkSchedule() {
-	log.Println("Checking schedule table for due interactions...")
 	doc, err := s.outClient.GetDocument(s.scheduleDoc)
 	if err != nil {
-		log.Printf("Failed to get schedule doc: %v", err)
+		log.Printf("Scheduler: failed to read schedule doc: %v", err)
 		return
 	}
 
-	entries := outline.ParseScheduleTable(doc.Text)
-	now := time.Now()
-
-	for _, entry := range entries {
-		// Try to parse the date. Format is likely relative or fuzzy as it comes from LLM.
-		// We'll use a simple heuristic or expect a specific format like "2006-01-02".
-		// Since the plan doesn't specify a strict date parser, we will try standard format.
-		parsedDate, err := time.Parse("2006-01-02", entry.Date)
-		if err == nil {
-			if now.After(parsedDate) || now.Format("2006-01-02") == parsedDate.Format("2006-01-02") {
-				msg := fmt.Sprintf("Reminder: It is time to contact %s (Scheduled date: %s)", entry.Contact, entry.Date)
-				s.tgBot.Notify(entry.Contact, msg)
-			}
-		} else {
-			// If we can't parse it, we just log it or we might need a better parser.
-			// For this task, we can just do a very basic string match or assume LLM output is standard.
-			log.Printf("Could not parse date '%s' for contact %s: %v", entry.Date, entry.Contact, err)
+	today := time.Now().Format("2006-01-02")
+	for _, entry := range outline.ParseScheduleTable(doc.Text) {
+		parsed, err := time.Parse("2006-01-02", entry.Date)
+		if err != nil {
+			log.Printf("Scheduler: skipping %q with unparseable date %q", entry.Contact, entry.Date)
+			continue
 		}
+		if parsed.Format("2006-01-02") > today {
+			continue
+		}
+		key := entry.Contact + "|" + today
+		if s.notifiedOn[key] {
+			continue
+		}
+		s.tgBot.Notify(fmt.Sprintf("Reminder: time to follow up with %s (scheduled %s)", entry.Contact, entry.Date))
+		s.notifiedOn[key] = true
 	}
 }

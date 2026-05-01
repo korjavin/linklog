@@ -13,8 +13,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseFollowUpJSON(t *testing.T) {
+	fu := parseFollowUp(`{"contact":"Alice","date":"2026-06-01"}`, "2026-12-31")
+	assert.Equal(t, "Alice", fu.Contact)
+	assert.Equal(t, "2026-06-01", fu.Date)
+}
+
+func TestParseFollowUpFencedJSON(t *testing.T) {
+	fu := parseFollowUp("```json\n{\"contact\":\"Bob\",\"date\":\"2026-07-01\"}\n```", "2026-12-31")
+	assert.Equal(t, "Bob", fu.Contact)
+	assert.Equal(t, "2026-07-01", fu.Date)
+}
+
+func TestParseFollowUpNone(t *testing.T) {
+	fu := parseFollowUp(`{"contact":"Carol","date":"none"}`, "2026-12-31")
+	assert.Equal(t, "Carol", fu.Contact)
+	assert.Equal(t, "", fu.Date)
+}
+
+func TestParseFollowUpInvalidDateFallsBack(t *testing.T) {
+	fu := parseFollowUp(`{"contact":"Dan","date":"next Friday"}`, "2026-12-31")
+	assert.Equal(t, "Dan", fu.Contact)
+	assert.Equal(t, "2026-12-31", fu.Date)
+}
+
+func TestParseFollowUpExtractsDateFromProse(t *testing.T) {
+	fu := parseFollowUp("Sure, let's say 2026-06-15.", "2026-12-31")
+	assert.Equal(t, "2026-06-15", fu.Date)
+}
+
 func TestLLMServiceIntegration(t *testing.T) {
-	_ = godotenv.Load("../../.env") // Load .env if present
+	_ = godotenv.Load("../../.env")
 
 	apiKey := os.Getenv("LLM_API_KEY")
 	baseURL := os.Getenv("LLM_BASE_URL")
@@ -33,18 +62,12 @@ func TestLLMServiceIntegration(t *testing.T) {
 		model = openai.GPT4o
 	}
 
-	env := os.Environ()
-	env = append(env, "OUTLINE_API_KEY="+outlineKey)
-	env = append(env, "OUTLINE_BASE_URL="+outlineURL)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, env)
+	mcpClient, err := mcp.NewClient(ctx, "npx", []string{"-y", "@spicesh/mcp-outline"}, os.Environ())
 	require.NoError(t, err)
-	defer func() {
-		_ = mcpClient.Close()
-	}()
+	defer func() { _ = mcpClient.Close() }()
 
 	openaiConfig := openai.DefaultConfig(apiKey)
 	openaiConfig.BaseURL = baseURL
@@ -54,14 +77,10 @@ func TestLLMServiceIntegration(t *testing.T) {
 
 	svc := NewService(openaiClient, mcpClient, collectionID, model)
 
-	// Since we are running a live test, we'll ask the model a simple question that might use Outline
-	// or at least test the interaction loop.
-	reply, nextDate, err := svc.ProcessInteraction(ctx, "Hello! Please list the collections in Outline. Do not create anything.")
+	reply, followUp, err := svc.ProcessInteraction(ctx, "Hello! Please list the collections in Outline. Do not create anything.")
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, reply)
-	assert.NotEmpty(t, nextDate)
-
 	t.Logf("LLM Reply: %s", reply)
-	t.Logf("Suggested Next Date: %s", nextDate)
+	t.Logf("Follow-up: %+v", followUp)
 }

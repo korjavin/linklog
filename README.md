@@ -35,6 +35,7 @@ LinkLog creates a "Networking" collection with the following hierarchy:
 ## 🛠️ Configuration
 The bot requires the following environment variables (see `.env.example`):
 - `TELEGRAM_BOT_TOKEN`: Your bot token from @BotFather.
+- `TELEGRAM_ADMIN_CHAT_ID`: Numeric Telegram user ID allowed to talk to the bot and to receive reminders.
 - `OUTLINE_API_KEY`: API key from your Outline instance.
 - `OUTLINE_BASE_URL`: The URL of your Outline instance.
 - `OUTLINE_COLLECTION_ID`: ID of the Outline collection the LLM agent is allowed to manage.

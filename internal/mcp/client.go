@@ -33,11 +33,13 @@ func NewClient(ctx context.Context, command string, args []string, env []string)
 
 	res, err := mcpClient.Initialize(ctx, initRequest)
 	if err != nil {
+		_ = mcpClient.Close()
 		cancel()
 		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
 	if res.ProtocolVersion == "" {
+		_ = mcpClient.Close()
 		cancel()
 		return nil, fmt.Errorf("initialization failed, no protocol version returned")
 	}
@@ -49,8 +51,9 @@ func NewClient(ctx context.Context, command string, args []string, env []string)
 }
 
 func (c *Client) Close() error {
+	err := c.mcpClient.Close()
 	c.cancel()
-	return c.mcpClient.Close()
+	return err
 }
 
 func (c *Client) ListTools(ctx context.Context) ([]mcp.Tool, error) {
@@ -70,11 +73,13 @@ func (c *Client) CallTool(ctx context.Context, name string, args map[string]inte
 }
 
 func ToolToOpenAIFunction(tool mcp.Tool) openai.FunctionDefinition {
-	var params any
-	// Convert InputSchema into any for OpenAI
-	// mcp.Tool.InputSchema usually contains JSON schema as a struct or interface
-	b, _ := json.Marshal(tool.InputSchema)
-	_ = json.Unmarshal(b, &params)
+	var params any = map[string]interface{}{"type": "object"}
+	if b, err := json.Marshal(tool.InputSchema); err == nil {
+		var decoded any
+		if err := json.Unmarshal(b, &decoded); err == nil && decoded != nil {
+			params = decoded
+		}
+	}
 
 	return openai.FunctionDefinition{
 		Name:        tool.Name,
