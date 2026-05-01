@@ -2,5 +2,3 @@ services:
   linklog:
     image: ghcr.io/korjavin/linklog:latest
     restart: unless-stopped
-    env_file:
-      - .env
