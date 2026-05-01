@@ -7,6 +7,7 @@ require (
 	github.com/mark3labs/mcp-go v0.50.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/stretchr/testify v1.9.0
+	gopkg.in/telebot.v3 v3.3.8
 )
 
 require (

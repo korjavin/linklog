@@ -67,12 +67,12 @@ Implement the LinkLog Telegram bot as described in the README, combining the Mod
 **Files:**
 - Create: `internal/bot/bot.go`
 
-- [ ] Set up `gopkg.in/telebot.v3` in `internal/bot/bot.go`
-- [ ] Implement text handler: receive input and pass it to the LLM agent (which updates Outline via MCP)
-- [ ] After LLM processing, extract the "suggested date of next contact" from the LLM (if missing, default to +1 week)
-- [ ] Use the Outline REST client to append or update this contact's date in the "schedule table" document
-- [ ] Wire up the bot in `cmd/linklog/main.go`
-- [ ] Run project test suite - must pass before task 6
+- [x] Set up `gopkg.in/telebot.v3` in `internal/bot/bot.go`
+- [x] Implement text handler: receive input and pass it to the LLM agent (which updates Outline via MCP)
+- [x] After LLM processing, extract the "suggested date of next contact" from the LLM (if missing, default to +1 week)
+- [x] Use the Outline REST client to append or update this contact's date in the "schedule table" document
+- [x] Wire up the bot in `cmd/linklog/main.go`
+- [x] Run project test suite - must pass before task 6
 
 ### Task 6: Reminder & Scheduler System
 
