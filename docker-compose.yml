@@ -1,6 +1,6 @@
 services:
   linklog:
-    image: ghcr.io/korjavin/linklog:latest
+    image: ghcr.io/korjavin/linklog:fb95399f38b2bf1499e57d4164c5573ccc7f76ad
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN
